@@ -1,5 +1,7 @@
 # Importer streamlit pour créer l'interface visuelle
 import streamlit as st
+# Utilisé pour échapper le texte dans les attributs HTML
+from html import escape
 # Importer datetime pour manipuler les dates
 from datetime import datetime, timedelta
 # Importer calendar pour les informations sur les calendriers
@@ -210,40 +212,53 @@ projects = st.session_state.projects
 # Construire un tableau pour afficher le planning avec couleurs de fond
 tableau_data = []
 tableau_styles = []  # Stocker les styles pour chaque ligne
+tableau_tooltips = []  # Stocker les tooltips pour chaque cellule
 
 for p in projects:
-    # Ajouter le projet lui-même
+    # Ligne unique pour le projet (les tâches seront intégrées dans les cellules du projet)
     row = {"Projet/Tâche": f"📋 {p['name']}"}
     start_idx = date_to_period_index(p["start_date"], period_labels, period_starts, period_ends)
     end_idx = date_to_period_index(p["end_date"], period_labels, period_starts, period_ends)
     
     row_styles = ["project"]  # Style pour la colonne Projet/Tâche
+    row_tooltips = [""]  # Tooltip vide pour la colonne Projet/Tâche
+    project_tooltip = f"{p['name']} • fin {p['end_date'].strftime('%d/%m/%Y')}"
+    tasks_per_period = [[] for _ in period_labels]  # Collecter les tâches par période pour le tooltip
+
     for idx, period in enumerate(period_labels):
         if idx >= start_idx and idx <= end_idx:
-            row[period] = " "  # Espace vide pour voir la couleur de fond
+            row[period] = ""  # La couleur de fond suffit pour représenter la période active
             row_styles.append("active")
+            row_tooltips.append(project_tooltip)
         else:
             row[period] = ""
             row_styles.append("inactive")
-    tableau_data.append(row)
-    tableau_styles.append(row_styles)
-    
-    # Ajouter les tâches du projet (toujours affichées)
+            row_tooltips.append("")
+
+    # Ajouter les tâches directement dans la cellule de période du projet
     if "tasks" in p and len(p["tasks"]) > 0:
         for task in p["tasks"]:
-            task_row = {"Projet/Tâche": f"  ↳ {task['name']}"}
             due_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
-            
-            task_row_styles = ["task"]  # Style pour la colonne Projet/Tâche
-            for idx, period in enumerate(period_labels):
-                if idx == due_idx:
-                    task_row[period] = "◆"  # Diamant pour marquer la date d'échéance
-                    task_row_styles.append("task_due")
-                else:
-                    task_row[period] = ""
-                    task_row_styles.append("inactive")
-            tableau_data.append(task_row)
-            tableau_styles.append(task_row_styles)
+            target_period = period_labels[due_idx]
+            task_label = f"◆ {escape(task['name'])}"
+
+            existing = row.get(target_period, "")
+            if existing.strip():
+                row[target_period] = f"{existing}<br>{task_label}"
+            else:
+                row[target_period] = task_label
+
+            tasks_per_period[due_idx].append(task)
+
+    # Construire les tooltips finaux en combinant projet + tâches de la période
+    for idx, period in enumerate(period_labels):
+        if tasks_per_period[idx]:
+            task_lines = [f"- {t['name']} (échéance {t['due_date'].strftime('%d/%m/%Y')})" for t in tasks_per_period[idx]]
+            tooltip_full = f"{project_tooltip}\nTâches:\n" + "\n".join(task_lines)
+            row_tooltips[idx + 1] = tooltip_full
+    tableau_data.append(row)
+    tableau_styles.append(row_styles)
+    tableau_tooltips.append(row_tooltips)
 
 # Créer un DataFrame
 df_tableau = pd.DataFrame(tableau_data)
@@ -305,7 +320,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
 # Construire le HTML du tableau
 html_table = '<table>'
 
@@ -320,6 +334,7 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
     html_table += '<tr>'
     # Première colonne (Projet/Tâche)
     project_name = row['Projet/Tâche']
+    tasks_per_period = [[] for _ in period_labels]  # Collecter les tâches par période pour le tooltip
     if project_name.startswith('📋'):
         html_table += f'<td class="row_label project_label">{project_name}</td>'
     else:
@@ -329,7 +344,9 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
     for period in period_labels:
         style_class = tableau_styles[row_idx][period_labels.index(period) + 1]
         cell_content = row.get(period, "")
-        html_table += f'<td class="{style_class}">{cell_content}</td>'
+        tooltip_text = tableau_tooltips[row_idx][period_labels.index(period) + 1]
+        tooltip_attr = f' title="{escape(tooltip_text)}"' if tooltip_text else ""
+        html_table += f'<td class="{style_class}"{tooltip_attr}>{cell_content}</td>'
     
     html_table += '</tr>'
 
@@ -340,7 +357,6 @@ st.markdown(html_table, unsafe_allow_html=True)
 
 # Formulaire d'ajout direct affiché sous le tableau (un seul clic pour ajouter)
 st.markdown("---")
-# Champs simples : nom, début, fin
 col_a, col_b, col_c, col_d = st.columns([3,2,2,1])
 with col_a:
     new_name = st.text_input("Nom du projet", value="")
