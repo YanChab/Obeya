@@ -206,13 +206,20 @@ def date_to_period_index(date, period_labels, period_starts, period_ends):
     else:
         return len(period_labels) - 1
 
+# Initialiser le filtre dans session_state s'il n'existe pas
+if "filtered_projects" not in st.session_state:
+    st.session_state.filtered_projects = [p["name"] for p in st.session_state.projects]
+
 # Utiliser la liste de projets depuis le session state
-projects = st.session_state.projects
+projects_full = st.session_state.projects
 
 # Construire un tableau pour afficher le planning avec couleurs de fond
 tableau_data = []
 tableau_styles = []  # Stocker les styles pour chaque ligne
 tableau_tooltips = []  # Stocker les tooltips pour chaque cellule
+
+# Filtrer les projets selon la sélection stockée
+projects = [p for p in projects_full if p["name"] in st.session_state.filtered_projects]
 
 for p in projects:
     # Ligne unique pour le projet (les tâches seront intégrées dans les cellules du projet)
@@ -236,11 +243,17 @@ for p in projects:
             row_tooltips.append("")
 
     # Ajouter les tâches directement dans la cellule de période du projet
+    # (sauf les tâches en retard)
     if "tasks" in p and len(p["tasks"]) > 0:
         for task in p["tasks"]:
+            # Ne pas afficher les tâches en retard dans les colonnes
+            if task["due_date"] < datetime.now():
+                continue
+            
             due_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
             target_period = period_labels[due_idx]
-            task_label = f"◆ {escape(task['name'])}"
+            task_progress = task.get("progress", "0%")
+            task_label = f"◆ {escape(task['name'])} ({task_progress})"
 
             existing = row.get(target_period, "")
             if existing.strip():
@@ -253,7 +266,10 @@ for p in projects:
     # Construire les tooltips finaux en combinant projet + tâches de la période
     for idx, period in enumerate(period_labels):
         if tasks_per_period[idx]:
-            task_lines = [f"- {t['name']} (échéance {t['due_date'].strftime('%d/%m/%Y')})" for t in tasks_per_period[idx]]
+            task_lines = [
+                f"- {t['name']} (échéance {t['due_date'].strftime('%d/%m/%Y')}) [{t.get('progress', '0%')}]"
+                for t in tasks_per_period[idx]
+            ]
             tooltip_full = f"{project_tooltip}\nTâches:\n" + "\n".join(task_lines)
             row_tooltips[idx + 1] = tooltip_full
     tableau_data.append(row)
@@ -324,21 +340,50 @@ st.markdown("""
 html_table = '<table>'
 
 # En-tête
-html_table += '<tr><th style="text-align: left;">Projet/Tâche</th>'
+html_table += '<tr><th style="text-align: left;">Projet/Tâche</th><th style="text-align: left;">En retard</th>'
 for period in period_labels:
     html_table += f'<th style="font-size: 11px;">{period}</th>'
 html_table += '</tr>'
+
+# Date actuelle pour détecter les tâches en retard
+today = datetime.now()
 
 # Lignes de données
 for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
     html_table += '<tr>'
     # Première colonne (Projet/Tâche)
     project_name = row['Projet/Tâche']
-    tasks_per_period = [[] for _ in period_labels]  # Collecter les tâches par période pour le tooltip
+    
+    # Colonne projet/tâche
     if project_name.startswith('📋'):
         html_table += f'<td class="row_label project_label">{project_name}</td>'
     else:
         html_table += f'<td class="row_label task_label">{project_name}</td>'
+    
+    # Deuxième colonne (En retard) - afficher les tâches en retard du projet
+    if project_name.startswith('📋'):
+        # C'est un projet - chercher ses tâches en retard
+        project_full_name = project_name.replace('📋 ', '')
+        current_project = next((p for p in st.session_state.projects if p["name"] == project_full_name), None)
+        overdue_tasks = []
+        if current_project and "tasks" in current_project:
+            overdue_tasks = [t for t in current_project["tasks"] if t["due_date"] < today]
+        
+        if overdue_tasks:
+            overdue_html = "<br>".join([f"⚠️ {escape(t['name'])}" for t in overdue_tasks])
+            # Créer un tooltip avec les détails des tâches en retard
+            tooltip_lines = [f"Tâches en retard pour {project_full_name}:"]
+            tooltip_lines.extend([
+                f"- {t['name']} (échéance {t['due_date'].strftime('%d/%m/%Y')}) [{t.get('progress', '0%')}]"
+                for t in overdue_tasks
+            ])
+            tooltip_text = "\n".join(tooltip_lines)
+            tooltip_attr = f' title="{escape(tooltip_text)}"'
+            html_table += f'<td style="text-align: left; color: #d32f2f;"{tooltip_attr}>{overdue_html}</td>'
+        else:
+            html_table += '<td style="text-align: left;"></td>'
+    else:
+        html_table += '<td style="text-align: left;"></td>'
     
     # Colonnes de périodes
     for period in period_labels:
@@ -354,6 +399,23 @@ html_table += '</table>'
 
 # Afficher le tableau HTML
 st.markdown(html_table, unsafe_allow_html=True)
+
+# Filtre des projets à afficher (affiché sous le tableau)
+st.markdown("---")
+st.markdown("**Filtre**")
+all_project_names = [p["name"] for p in projects_full]
+selected_project_names = st.multiselect(
+    "Projets à afficher",
+    options=all_project_names,
+    default=st.session_state.filtered_projects,
+    help="Sélectionne un ou plusieurs projets pour les afficher dans le tableau",
+    key="filter_projects_selector"
+)
+
+# Mettre à jour le filtre en session_state et rafraîchir
+if selected_project_names != st.session_state.filtered_projects:
+    st.session_state.filtered_projects = selected_project_names
+    st.rerun()
 
 # Formulaire d'ajout direct affiché sous le tableau (un seul clic pour ajouter)
 st.markdown("---")
@@ -400,7 +462,7 @@ if len(st.session_state.projects) > 0:
         for i, task in enumerate(tasks):
             col_t1, col_t2, col_t3 = st.columns([2, 2, 1])
             with col_t1:
-                st.write(f"📌 {task['name']}")
+                st.write(f"📌 {task['name']} ({task.get('progress', '0%')})")
             with col_t2:
                 # Trouver le label de la période correspondant à la date de fin
                 period_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
@@ -416,12 +478,14 @@ if len(st.session_state.projects) > 0:
     
     # Formulaire d'ajout de tâche
     st.markdown("**Ajouter une tâche**")
-    col_ta1, col_ta2, col_ta3 = st.columns([2, 2, 1])
+    col_ta1, col_ta2, col_ta3, col_ta4 = st.columns([2, 2, 1, 1])
     with col_ta1:
         task_name = st.text_input("Nom de la tâche", value="", key=f"task_name_{selected_project_idx}")
     with col_ta2:
         task_due = st.selectbox("À faire avant", period_labels, index=0, key=f"task_due_{selected_project_idx}")
     with col_ta3:
+        task_progress = st.selectbox("État", ["0%", "50%", "100%"], index=0, key=f"task_progress_{selected_project_idx}")
+    with col_ta4:
         if st.button("Ajouter tâche", key=f"add_task_{selected_project_idx}"):
             if task_name.strip() == "":
                 st.error("Le nom de la tâche est requis.")
@@ -431,7 +495,8 @@ if len(st.session_state.projects) > 0:
                     st.session_state.projects[selected_project_idx]["tasks"] = []
                 st.session_state.projects[selected_project_idx]["tasks"].append({
                     "name": task_name.strip(),
-                    "due_date": due_date
+                    "due_date": due_date,
+                    "progress": task_progress
                 })
                 st.success(f"Tâche '{task_name.strip()}' ajoutée au projet.")
                 st.rerun()
