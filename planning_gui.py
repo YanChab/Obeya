@@ -147,69 +147,71 @@ period_types = df_gantt.sort_values("Order")["Type"].tolist()
 period_starts = df_gantt.sort_values("Order")["Start"].tolist()
 period_ends = df_gantt.sort_values("Order")["Finish"].tolist()
 
-import plotly.graph_objects as go
-
-# Préparer les couleurs
-color_map = {"Semaine": "#1f77b4", "Mois": "#ff7f0e"}
-colors = [color_map.get(t, "#888888") for t in period_types]
-
-# Construire un subplot avec 2 lignes : en haut les titres/colonnes, en bas les lignes de projets
-from plotly.subplots import make_subplots
-
 # Gérer les projets via `st.session_state` pour permettre l'ajout dynamique
 if "projects" not in st.session_state:
-    # Projets par défaut, triés alphabétiquement
+    # Projets par défaut, avec dates absolues
+    initial_date = datetime.now()
     st.session_state.projects = [
-        {"name": "Projet Alpha", "start": 0, "end": 3},
-        {"name": "Projet Beta",  "start": 2, "end": 10},
-        {"name": "Projet Gamma", "start": 5, "end": 17},
+        {"name": "Projet Alpha", "start_date": initial_date + timedelta(days=0), "end_date": initial_date + timedelta(days=20), "tasks": []},
+        {"name": "Projet Beta",  "start_date": initial_date + timedelta(days=14), "end_date": initial_date + timedelta(days=70), "tasks": []},
+        {"name": "Projet Gamma", "start_date": initial_date + timedelta(days=35), "end_date": initial_date + timedelta(days=119), "tasks": []},
     ]
-    # Trier les projets par ordre alphabétique inverse (Z → A) au démarrage
-    st.session_state.projects.sort(key=lambda p: p["name"].lower(), reverse=True)
+    # Trier les projets par ordre alphabétique (A → Z) au démarrage
+    st.session_state.projects.sort(key=lambda p: p["name"].lower())
+
+# Fonction pour convertir une date absolue en indice de période
+def date_to_period_index(date, period_labels, period_starts, period_ends):
+    """Retourne l'indice de la période qui contient la date donnée"""
+    for idx in range(len(period_labels)):
+        if period_starts[idx] <= date <= period_ends[idx]:
+            return idx
+    # Si la date n'est pas dans les périodes, retourner l'indice le plus proche
+    if date < period_starts[0]:
+        return 0
+    else:
+        return len(period_labels) - 1
 
 # Utiliser la liste de projets depuis le session state
 projects = st.session_state.projects
 
-# Pour l'affichage, les projets sont déjà triés alphabétiquement en session state
-projects_display = projects
+# Construire un tableau pour afficher le planning
+# Créer les données du tableau
+tableau_data = []
 
-# Construire la matrice projet x période (0/1) à partir des projets triés
-project_names = [p["name"] for p in projects_display]
-z = []
-for p in projects_display:
-    row = [1 if (idx >= p["start"] and idx <= p["end"]) else 0 for idx in range(len(period_labels))]
-    z.append(row)
+for p in projects:
+    # Ajouter le projet lui-même
+    row = {"Projet/Tâche": f"📋 {p['name']}"}
+    start_idx = date_to_period_index(p["start_date"], period_labels, period_starts, period_ends)
+    end_idx = date_to_period_index(p["end_date"], period_labels, period_starts, period_ends)
+    for idx, period in enumerate(period_labels):
+        if idx >= start_idx and idx <= end_idx:
+            row[period] = "█"
+        else:
+            row[period] = ""
+    tableau_data.append(row)
+    
+    # Ajouter les tâches du projet (toujours affichées)
+    if "tasks" in p and len(p["tasks"]) > 0:
+        for task in p["tasks"]:
+            task_row = {"Projet/Tâche": f"  ↳ {task['name']}"}
+            due_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
+            for idx, period in enumerate(period_labels):
+                if idx == due_idx:
+                    task_row[period] = "◆"  # Diamant pour marquer la date d'échéance
+                else:
+                    task_row[period] = ""
+            tableau_data.append(task_row)
 
-# Construire une seule heatmap : colonnes en haut (axe X) et projets en lignes
-fig = go.Figure()
+# Créer un DataFrame
+df_tableau = pd.DataFrame(tableau_data)
 
-# Heatmap des projets (1 = actif)
-heat = go.Heatmap(
-    z=z,
-    x=period_labels,
-    y=project_names,
-    colorscale=[[0, 'rgba(255,255,255,0)'], [1, '#2ca02c']],
-    showscale=False,
-    hovertemplate="Projet: %{y}<br>Période: %{x}<extra></extra>",
-)
-fig.add_trace(heat)
+# Afficher le tableau avec mise en forme (lecture seule, sans index numérique)
+# La colonne "Projet/Tâche" devient l'index
+st.subheader("Planning Gantt (Tableau)")
+st.table(df_tableau.set_index('Projet/Tâche'))
 
-# Placer les labels de l'axe X au-dessus
-fig.update_xaxes(side='top', tickangle=-45)
-
-# Ajuster le style et la taille
-fig.update_layout(
-    height=420,
-    margin=dict(l=40, r=20, t=60, b=80),
-    # Pas de titre du diagramme (affichage épuré)
-)
-
-# Afficher la figure dans Streamlit
-st.plotly_chart(fig, use_container_width=True)
-
-# Formulaire d'ajout direct affiché sous le Gantt (un seul clic pour ajouter)
+# Formulaire d'ajout direct affiché sous le tableau (un seul clic pour ajouter)
 st.markdown("---")
-st.subheader("Ajouter un projet")
 # Champs simples : nom, début, fin
 col_a, col_b, col_c, col_d = st.columns([3,2,2,1])
 with col_a:
@@ -220,19 +222,76 @@ with col_c:
     new_end = st.selectbox("Période de fin", period_labels, index=min(3, len(period_labels)-1))
 with col_d:
     if st.button("Ajouter"):
-        # convertir labels en indices
-        si = period_labels.index(new_start)
-        ei = period_labels.index(new_end)
+        # convertir labels en dates absolues
+        start_date = period_starts[period_labels.index(new_start)]
+        end_date = period_ends[period_labels.index(new_end)]
         if new_name.strip() == "":
             st.error("Le nom du projet est requis.")
-        elif ei < si:
+        elif end_date < start_date:
             st.error("La période de fin doit être après la période de début.")
         else:
-            st.session_state.projects.append({"name": new_name.strip(), "start": si, "end": ei})
-            # Trier les projets par ordre alphabétique inverse (Z → A)
-            st.session_state.projects.sort(key=lambda p: p["name"].lower(), reverse=True)
+            st.session_state.projects.append({"name": new_name.strip(), "start_date": start_date, "end_date": end_date, "tasks": []})
+            # Trier les projets par ordre alphabétique (A → Z)
+            st.session_state.projects.sort(key=lambda p: p["name"].lower())
             st.success(f"Projet '{new_name.strip()}' ajouté.")
             # Forcer la réexécution du script pour mettre à jour le graphique immédiatement
             st.rerun()
+
+# Section de modification de projets
+st.markdown("---")
+st.subheader("Modifier un projet")
+if len(st.session_state.projects) > 0:
+    # Sélecteur pour choisir le projet à modifier
+    project_names_list = [p["name"] for p in st.session_state.projects]
+    selected_project_name = st.selectbox("Sélectionner un projet à modifier", project_names_list)
+    
+    # Trouver le projet sélectionné
+    selected_project_idx = next(i for i, p in enumerate(st.session_state.projects) if p["name"] == selected_project_name)
+    selected_project = st.session_state.projects[selected_project_idx]
+    
+    # Afficher les tâches existantes
+    st.markdown("**Tâches existantes**")
+    tasks = selected_project.get("tasks", [])
+    if len(tasks) > 0:
+        for i, task in enumerate(tasks):
+            col_t1, col_t2, col_t3 = st.columns([2, 2, 1])
+            with col_t1:
+                st.write(f"📌 {task['name']}")
+            with col_t2:
+                # Trouver le label de la période correspondant à la date de fin
+                period_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
+                due_period = period_labels[period_idx] if period_idx < len(period_labels) else "N/A"
+                st.write(f"À faire avant: {due_period}")
+            with col_t3:
+                if st.button("Supprimer", key=f"delete_task_{selected_project_idx}_{i}"):
+                    st.session_state.projects[selected_project_idx]["tasks"].pop(i)
+                    st.success(f"Tâche '{task['name']}' supprimée.")
+                    st.rerun()
+    else:
+        st.info("Aucune tâche pour ce projet.")
+    
+    # Formulaire d'ajout de tâche
+    st.markdown("**Ajouter une tâche**")
+    col_ta1, col_ta2, col_ta3 = st.columns([2, 2, 1])
+    with col_ta1:
+        task_name = st.text_input("Nom de la tâche", value="", key=f"task_name_{selected_project_idx}")
+    with col_ta2:
+        task_due = st.selectbox("À faire avant", period_labels, index=0, key=f"task_due_{selected_project_idx}")
+    with col_ta3:
+        if st.button("Ajouter tâche", key=f"add_task_{selected_project_idx}"):
+            if task_name.strip() == "":
+                st.error("Le nom de la tâche est requis.")
+            else:
+                due_date = period_ends[period_labels.index(task_due)]
+                if "tasks" not in st.session_state.projects[selected_project_idx]:
+                    st.session_state.projects[selected_project_idx]["tasks"] = []
+                st.session_state.projects[selected_project_idx]["tasks"].append({
+                    "name": task_name.strip(),
+                    "due_date": due_date
+                })
+                st.success(f"Tâche '{task_name.strip()}' ajoutée au projet.")
+                st.rerun()
+else:
+    st.info("Aucun projet à modifier. Créez un projet d'abord.")
 
 # Fin de la vue Gantt
