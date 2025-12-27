@@ -400,6 +400,146 @@ html_table += '</table>'
 # Afficher le tableau HTML
 st.markdown(html_table, unsafe_allow_html=True)
 
+# Section d'édition de projet - accessible en cliquant sur un projet dans le tableau
+st.markdown("---")
+st.markdown("**✏️ Modifier un projet**")
+
+if len(st.session_state.projects) > 0:
+    filtered_projects = [p for p in st.session_state.projects if p["name"] in st.session_state.filtered_projects]
+    if len(filtered_projects) > 0:
+        # Afficher les popovers pour chaque projet
+        for project in filtered_projects:
+            with st.popover(f"📋 {project['name']}", use_container_width=True):
+                st.markdown(f"**Modifier : {project['name']}**")
+                
+                # Créer 2 colonnes : 1/3 pour les paramètres du projet, 2/3 pour les tâches
+                col_params, col_tasks = st.columns([1, 2], gap="large")
+                
+                # ===== COLONNE 1 : PARAMÈTRES DU PROJET =====
+                with col_params:
+                    st.markdown("**Paramètres**")
+                    
+                    # Champs de modification
+                    new_project_name = st.text_input(
+                        "Nom",
+                        value=project["name"],
+                        key=f"edit_name_{project['name']}"
+                    )
+                    
+                    new_start_period = st.selectbox(
+                        "Début",
+                        options=period_labels,
+                        index=date_to_period_index(project["start_date"], period_labels, period_starts, period_ends),
+                        key=f"edit_start_{project['name']}"
+                    )
+                    
+                    new_end_period = st.selectbox(
+                        "Fin",
+                        options=period_labels,
+                        index=date_to_period_index(project["end_date"], period_labels, period_starts, period_ends),
+                        key=f"edit_end_{project['name']}"
+                    )
+                    
+                    col_save, col_delete = st.columns(2)
+                    with col_save:
+                        if st.button("💾 Sauvegarder", key=f"save_project_{project['name']}", use_container_width=True):
+                            # Trouver l'index du projet
+                            proj_idx = next(i for i, p in enumerate(st.session_state.projects) if p["name"] == project["name"])
+                            
+                            # Vérifier les dates
+                            start_date = period_starts[period_labels.index(new_start_period)]
+                            end_date = period_ends[period_labels.index(new_end_period)]
+                            
+                            if end_date < start_date:
+                                st.error("La période de fin doit être après la période de début.")
+                            else:
+                                # Mettre à jour le projet
+                                st.session_state.projects[proj_idx]["name"] = new_project_name.strip()
+                                st.session_state.projects[proj_idx]["start_date"] = start_date
+                                st.session_state.projects[proj_idx]["end_date"] = end_date
+                                
+                                # Trier les projets par ordre alphabétique
+                                st.session_state.projects.sort(key=lambda p: p["name"].lower())
+                                
+                                st.success("Projet modifié.")
+                                st.rerun()
+                    
+                    with col_delete:
+                        if st.button("🗑️ Supprimer", key=f"delete_project_{project['name']}", use_container_width=True):
+                            proj_idx = next(i for i, p in enumerate(st.session_state.projects) if p["name"] == project["name"])
+                            deleted_name = st.session_state.projects[proj_idx]["name"]
+                            st.session_state.projects.pop(proj_idx)
+                            
+                            # Mettre à jour le filtre si le projet supprimé était sélectionné
+                            if deleted_name in st.session_state.filtered_projects:
+                                st.session_state.filtered_projects.remove(deleted_name)
+                            
+                            st.success(f"Projet supprimé.")
+                            st.rerun()
+                
+                # ===== COLONNE 2 : GESTION DES TÂCHES =====
+                with col_tasks:
+                    st.markdown("**Tâches**")
+                    
+                    # Afficher les tâches existantes
+                    proj_idx = next(i for i, p in enumerate(st.session_state.projects) if p["name"] == project["name"])
+                    tasks = st.session_state.projects[proj_idx].get("tasks", [])
+                    
+                    # Affichage avec scrollable si beaucoup de tâches
+                    if len(tasks) > 0:
+                        task_container = st.container(border=True, height=200)
+                        with task_container:
+                            for task_idx, task in enumerate(tasks):
+                                st.caption(f"📌 {task['name']} | {task.get('progress', '0%')}")
+                                period_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
+                                due_period = period_labels[period_idx] if period_idx < len(period_labels) else "N/A"
+                                st.caption(f"📅 {due_period}")
+                                if st.button("❌ Supprimer", key=f"delete_task_{project['name']}_{task_idx}", use_container_width=True):
+                                    st.session_state.projects[proj_idx]["tasks"].pop(task_idx)
+                                    st.rerun()
+                                st.divider()
+                    else:
+                        st.caption("Aucune tâche")
+                    
+                    st.divider()
+                    
+                    # Formulaire d'ajout de tâche
+                    st.markdown("**Ajouter une tâche**", help="Remplissez les champs ci-dessous")
+                    task_name = st.text_input(
+                        "Nom",
+                        value="",
+                        key=f"task_name_{project['name']}"
+                    )
+                    
+                    task_due = st.selectbox(
+                        "Avant",
+                        options=period_labels,
+                        index=0,
+                        key=f"task_due_{project['name']}"
+                    )
+                    
+                    task_progress = st.selectbox(
+                        "État",
+                        options=["0%", "50%", "100%"],
+                        index=0,
+                        key=f"task_progress_{project['name']}"
+                    )
+                    
+                    if st.button("➕ Ajouter", key=f"add_task_{project['name']}", use_container_width=True):
+                        if task_name.strip() == "":
+                            st.error("Nom requis.")
+                        else:
+                            due_date = period_ends[period_labels.index(task_due)]
+                            if "tasks" not in st.session_state.projects[proj_idx]:
+                                st.session_state.projects[proj_idx]["tasks"] = []
+                            st.session_state.projects[proj_idx]["tasks"].append({
+                                "name": task_name.strip(),
+                                "due_date": due_date,
+                                "progress": task_progress
+                            })
+                            st.success("Tâche ajoutée.")
+                            st.rerun()
+
 # Filtre des projets à afficher (affiché sous le tableau)
 st.markdown("---")
 st.markdown("**Filtre**")
@@ -439,6 +579,8 @@ with col_d:
             st.session_state.projects.append({"name": new_name.strip(), "start_date": start_date, "end_date": end_date, "tasks": []})
             # Trier les projets par ordre alphabétique (A → Z)
             st.session_state.projects.sort(key=lambda p: p["name"].lower())
+            # Ajouter le nouveau projet au filtre pour qu'il s'affiche
+            st.session_state.filtered_projects.append(new_name.strip())
             st.success(f"Projet '{new_name.strip()}' ajouté.")
             # Forcer la réexécution du script pour mettre à jour le graphique immédiatement
             st.rerun()
