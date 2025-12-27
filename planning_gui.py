@@ -19,28 +19,61 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Ajouter du CSS personnalisé pour un style professionnel moderne
+# Ajouter du CSS personnalisé adaptatif au thème du système d'exploitation
+# Utilise les media queries CSS pour détecter automatiquement le thème
 st.markdown("""
 <style>
+    /* ===== MODE CLAIR (par défaut) ===== */
+    :root {
+        --color-titles: #1f77b4;
+        --color-border-title: #1f77b4;
+        --color-subtitle-border: #e0e0e0;
+        --color-metric-bg: #f0f2f6;
+        --color-table-border: #ddd;
+        --color-table-bg: white;
+        --color-cell-bg: #f9f9f9;
+        --color-project-bg: #2ca02c;
+        --color-task-due-bg: #ff7f0e;
+        --color-text-on-color: white;
+        --color-table-text: inherit;
+    }
+    
+    /* ===== MODE SOMBRE (détecté via prefers-color-scheme) ===== */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --color-titles: #64b5f6;
+            --color-border-title: #64b5f6;
+            --color-subtitle-border: #444;
+            --color-metric-bg: #2c3e50;
+            --color-table-border: #555;
+            --color-table-bg: #1e1e1e;
+            --color-cell-bg: #2d2d2d;
+            --color-project-bg: #2ca02c;
+            --color-task-due-bg: #ff7f0e;
+            --color-text-on-color: white;
+            --color-table-text: #e0e0e0;
+        }
+    }
+    
     /* Styling pour les titres principaux */
     h1 {
         text-align: center;
-        color: #1f77b4;
+        color: var(--color-titles);
         padding: 20px;
-        border-bottom: 3px solid #1f77b4;
+        border-bottom: 3px solid var(--color-border-title);
     }
     
     /* Styling pour les sous-titres */
     h2 {
-        color: #1f77b4;
+        color: var(--color-titles);
         margin-top: 30px;
         padding-bottom: 10px;
-        border-bottom: 2px solid #e0e0e0;
+        border-bottom: 2px solid var(--color-subtitle-border);
     }
     
     /* Styling pour les métriques */
     [data-testid="metric-container"] {
-        background-color: #f0f2f6;
+        background-color: var(--color-metric-bg);
         padding: 15px;
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -174,41 +207,136 @@ def date_to_period_index(date, period_labels, period_starts, period_ends):
 # Utiliser la liste de projets depuis le session state
 projects = st.session_state.projects
 
-# Construire un tableau pour afficher le planning
-# Créer les données du tableau
+# Construire un tableau pour afficher le planning avec couleurs de fond
 tableau_data = []
+tableau_styles = []  # Stocker les styles pour chaque ligne
 
 for p in projects:
     # Ajouter le projet lui-même
     row = {"Projet/Tâche": f"📋 {p['name']}"}
     start_idx = date_to_period_index(p["start_date"], period_labels, period_starts, period_ends)
     end_idx = date_to_period_index(p["end_date"], period_labels, period_starts, period_ends)
+    
+    row_styles = ["project"]  # Style pour la colonne Projet/Tâche
     for idx, period in enumerate(period_labels):
         if idx >= start_idx and idx <= end_idx:
-            row[period] = "█"
+            row[period] = " "  # Espace vide pour voir la couleur de fond
+            row_styles.append("active")
         else:
             row[period] = ""
+            row_styles.append("inactive")
     tableau_data.append(row)
+    tableau_styles.append(row_styles)
     
     # Ajouter les tâches du projet (toujours affichées)
     if "tasks" in p and len(p["tasks"]) > 0:
         for task in p["tasks"]:
             task_row = {"Projet/Tâche": f"  ↳ {task['name']}"}
             due_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
+            
+            task_row_styles = ["task"]  # Style pour la colonne Projet/Tâche
             for idx, period in enumerate(period_labels):
                 if idx == due_idx:
                     task_row[period] = "◆"  # Diamant pour marquer la date d'échéance
+                    task_row_styles.append("task_due")
                 else:
                     task_row[period] = ""
+                    task_row_styles.append("inactive")
             tableau_data.append(task_row)
+            tableau_styles.append(task_row_styles)
 
 # Créer un DataFrame
 df_tableau = pd.DataFrame(tableau_data)
 
-# Afficher le tableau avec mise en forme (lecture seule, sans index numérique)
-# La colonne "Projet/Tâche" devient l'index
+# Générer le HTML du tableau avec styles personnalisés
 st.subheader("Planning Gantt (Tableau)")
-st.table(df_tableau.set_index('Projet/Tâche'))
+
+# CSS personnalisé pour le tableau (utilise les variables CSS du thème)
+st.markdown("""
+<style>
+    table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+        border: 1px solid var(--color-table-border);
+        background-color: var(--color-table-bg);
+    }
+    th {
+        padding: 8px;
+        text-align: center;
+        height: 30px;
+        background-color: transparent;
+        font-weight: bold;
+        border-bottom: 2px solid var(--color-table-border);
+        border-right: none;
+        border-top: none;
+        border-left: none;
+        color: var(--color-table-text);
+    }
+    td {
+        padding: 8px;
+        text-align: center;
+        height: 30px;
+        border: none !important;
+        background-color: var(--color-cell-bg);
+        color: var(--color-table-text);
+    }
+    .row_label {
+        text-align: left;
+        font-weight: normal;
+        border-right: 1px solid var(--color-table-border) !important;
+    }
+    .project_label {
+        font-weight: bold;
+    }
+    .task_label {
+        font-style: italic;
+    }
+    .active {
+        background-color: var(--color-project-bg);
+        color: var(--color-text-on-color);
+    }
+    .inactive {
+        background-color: transparent;
+    }
+    .task_due {
+        background-color: var(--color-task-due-bg);
+        color: var(--color-text-on-color);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Construire le HTML du tableau
+html_table = '<table>'
+
+# En-tête
+html_table += '<tr><th style="text-align: left;">Projet/Tâche</th>'
+for period in period_labels:
+    html_table += f'<th style="font-size: 11px;">{period}</th>'
+html_table += '</tr>'
+
+# Lignes de données
+for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
+    html_table += '<tr>'
+    # Première colonne (Projet/Tâche)
+    project_name = row['Projet/Tâche']
+    if project_name.startswith('📋'):
+        html_table += f'<td class="row_label project_label">{project_name}</td>'
+    else:
+        html_table += f'<td class="row_label task_label">{project_name}</td>'
+    
+    # Colonnes de périodes
+    for period in period_labels:
+        style_class = tableau_styles[row_idx][period_labels.index(period) + 1]
+        cell_content = row.get(period, "")
+        html_table += f'<td class="{style_class}">{cell_content}</td>'
+    
+    html_table += '</tr>'
+
+html_table += '</table>'
+
+# Afficher le tableau HTML
+st.markdown(html_table, unsafe_allow_html=True)
 
 # Formulaire d'ajout direct affiché sous le tableau (un seul clic pour ajouter)
 st.markdown("---")
