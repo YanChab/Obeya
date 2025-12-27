@@ -164,8 +164,8 @@ if "projects" not in st.session_state:
         {"name": "Projet Beta",  "start": 2, "end": 10},
         {"name": "Projet Gamma", "start": 5, "end": 17},
     ]
-    # Trier les projets par ordre alphabétique au démarrage
-    st.session_state.projects.sort(key=lambda p: p["name"].lower())
+    # Trier les projets par ordre alphabétique inverse (Z → A) au démarrage
+    st.session_state.projects.sort(key=lambda p: p["name"].lower(), reverse=True)
 
 # Utiliser la liste de projets depuis le session state
 projects = st.session_state.projects
@@ -229,8 +229,8 @@ with col_d:
             st.error("La période de fin doit être après la période de début.")
         else:
             st.session_state.projects.append({"name": new_name.strip(), "start": si, "end": ei})
-            # Trier les projets par ordre alphabétique
-            st.session_state.projects.sort(key=lambda p: p["name"].lower())
+            # Trier les projets par ordre alphabétique inverse (Z → A)
+            st.session_state.projects.sort(key=lambda p: p["name"].lower(), reverse=True)
             st.success(f"Projet '{new_name.strip()}' ajouté.")
             # Forcer la réexécution du script pour mettre à jour le graphique immédiatement
             st.rerun()
