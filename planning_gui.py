@@ -48,33 +48,31 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Afficher le titre principal
+# Réafficher le titre principal
 st.title("📅 Planning Obeya")
 
-# Obtenir la date d'aujourd'hui
-date_debut = datetime.now()
+# Obtenir la date d'aujourd'hui par défaut
+initial_date = datetime.now()
 
-# Afficher la date actuelle
-col1, col2, col3 = st.columns(3)
-with col1:
-    # Afficher la métrique de la date actuelle
-    st.metric("📌 Date d'aujourd'hui", date_debut.strftime('%d/%m/%Y'))
-with col2:
-    # Afficher le jour de la semaine
-    st.metric("📆 Jour", date_debut.strftime('%A'))
-with col3:
-    # Afficher le jour du mois
-    st.metric("🗓️ Semaine de l'année", f"Semaine {date_debut.isocalendar()[1]}")
+# Ajout d'un sélecteur de date pour définir la date de début du Gantt
+# Le sélecteur est placé 'à côté' de la date et de la semaine
+cols = st.columns(3)
+# Sélecteur de date (menu) dans la colonne du milieu
+selected_date = cols[2].date_input("Date de début du Gantt", value=initial_date.date())
+
+# Convertir la date sélectionnée en datetime pour les calculs
+date_debut = datetime.combine(selected_date, datetime.min.time())
+
+# Afficher la date et la semaine en petit (le jour est retiré)
+cols[0].markdown(f"<div style='font-size:13px'>📌 <strong>Date d\'aujourd\'hui</strong><br><span style='font-size:16px'>{date_debut.strftime('%d/%m/%Y')}</span></div>", unsafe_allow_html=True)
+cols[1].markdown(f"<div style='font-size:13px'>🗓️ <strong>Semaine</strong><br><span style='font-size:16px'>Semaine {date_debut.isocalendar()[1]}</span></div>", unsafe_allow_html=True)
 
 # Ajouter une ligne de séparation
 st.divider()
 
 # ============================================================================
-# SECTION 1: LES 12 PROCHAINES SEMAINES
+# SECTION 1: LES 12 PROCHAINES SEMAINES (header supprimé pour affichage épuré)
 # ============================================================================
-
-# Afficher le titre de la section des 12 semaines
-st.header("📅 Les 12 prochaines semaines")
 
 # Créer une liste pour stocker les données des semaines
 donnees_semaines = []
@@ -115,8 +113,9 @@ for i, s in enumerate(donnees_semaines):
     # Calculer les dates de début et fin réelles en datetime
     start = datetime.strptime(s["Date de début"], "%d/%m/%Y")
     end = datetime.strptime(s["Date de fin"], "%d/%m/%Y") + timedelta(days=1)  # rendre la fin inclusive
-    # Construire le label de la tâche
-    label = f"{s['Semaine']} ({start.strftime('%d/%m')})"
+    # Construire le label de la tâche : utiliser le numéro ISO de la semaine
+    week_num = start.isocalendar()[1]
+    label = f"S{week_num:02d} ({start.strftime('%d/%m')})"
     # Ajouter la tâche avec le type 'Semaine' et un ordre pour conserver la séquence
     tasks.append({"Task": label, "Start": start, "Finish": end, "Type": "Semaine", "Order": i})
 
@@ -174,49 +173,29 @@ for p in projects:
         row.append(1 if (idx >= p["start"] and idx <= p["end"]) else 0)
     z.append(row)
 
-# Créer figure avec deux sous-graphes alignés horizontalement
-fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.2, 0.8], vertical_spacing=0.02, specs=[[{"type":"bar"}], [{"type":"heatmap"}]])
+# Construire une seule heatmap : colonnes en haut (axe X) et projets en lignes
+fig = go.Figure()
 
-# Trace 1 : bar mince servant d'en-têtes de colonnes (visual only)
-fig.add_trace(go.Bar(
-    x=period_labels,
-    y=[1] * len(period_labels),
-    marker_color=colors,
-    hoverinfo='text',
-    text=[f"{lbl}<br>{start.strftime('%d/%m/%Y')} → {(end - timedelta(days=1)).strftime('%d/%m/%Y')}" for lbl, start, end in zip(period_labels, period_starts, period_ends)],
-    hovertemplate="%{text}<extra></extra>",
-    showlegend=False,
-), row=1, col=1)
-
-# Trace 2 : heatmap des projets (1 = actif)
-fig.add_trace(go.Heatmap(
+# Heatmap des projets (1 = actif)
+heat = go.Heatmap(
     z=z,
     x=period_labels,
     y=project_names,
     colorscale=[[0, 'rgba(255,255,255,0)'], [1, '#2ca02c']],
     showscale=False,
     hovertemplate="Projet: %{y}<br>Période: %{x}<extra></extra>",
-), row=2, col=1)
-
-# Ajustements de layout : placer les labels des colonnes en haut
-fig.update_xaxes(side='top', tickangle=-45, row=1, col=1)
-fig.update_xaxes(side='bottom', tickangle=-45, row=2, col=1)
-
-# Cacher l'axe y de la première ligne
-fig.update_yaxes(visible=False, row=1, col=1)
-
-# Styling général
-fig.update_layout(
-    height=480,
-    margin=dict(l=40, r=20, t=80, b=120),
-    title_text="Planning — 12 semaines puis 6 mois (colonnes) avec projets",
 )
+fig.add_trace(heat)
 
-# Ajouter des annotations de titre de colonne au-dessus (optionnel, aide visuelle)
-annotations = []
-for lbl, typ in zip(period_labels, period_types):
-    annotations.append(dict(x=lbl, y=1.05, xref='x', yref='paper', text=lbl, showarrow=False, font=dict(size=10, color='black')))
-fig.update_layout(annotations=annotations)
+# Placer les labels de l'axe X au-dessus
+fig.update_xaxes(side='top', tickangle=-45)
+
+# Ajuster le style et la taille
+fig.update_layout(
+    height=420,
+    margin=dict(l=40, r=20, t=60, b=80),
+    # Pas de titre du diagramme (affichage épuré)
+)
 
 # Afficher la figure dans Streamlit
 st.plotly_chart(fig, use_container_width=True)
