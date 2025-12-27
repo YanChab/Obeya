@@ -100,129 +100,87 @@ for i in range(12):
         "Jour fin": date_semaine_fin.strftime('%A')
     })
 
-# Créer un DataFrame avec les données des semaines
-df_semaines = pd.DataFrame(donnees_semaines)
-
-# Afficher le tableau des semaines
-st.dataframe(
-    # Utiliser le DataFrame créé
-    df_semaines,
-    # Utiliser la largeur complète de la colonne
-    use_container_width=True,
-    # Cacher l'index des lignes
-    hide_index=True
-)
-
-# Afficher un résumé des semaines
-st.info(f"✅ **{len(df_semaines)} semaines** planifiées du {date_debut.strftime('%d/%m/%Y')} au {(date_debut + timedelta(weeks=11, days=6)).strftime('%d/%m/%Y')}")
-
-# Ajouter une ligne de séparation
-st.divider()
-
 # ============================================================================
-# SECTION 2: LES 6 MOIS SUIVANTS
+# SECTION: DIAGRAMME DE GANTT COMBINÉ (SEM => MOIS)
 # ============================================================================
 
-# Afficher le titre de la section des 6 mois
-st.header("📊 Les 6 mois suivants")
+# Importer plotly pour générer le diagramme de Gantt
+import plotly.express as px
 
-# Créer une liste pour stocker les données des mois
-donnees_mois = []
+# Construire la liste des tâches pour le Gantt
+tasks = []
 
-# Calculer la date de début pour les 6 mois (après la 12ème semaine)
+# Ajouter les 12 semaines en tant que tâches
+for i, s in enumerate(donnees_semaines):
+    # Calculer les dates de début et fin réelles en datetime
+    start = datetime.strptime(s["Date de début"], "%d/%m/%Y")
+    end = datetime.strptime(s["Date de fin"], "%d/%m/%Y") + timedelta(days=1)  # rendre la fin inclusive
+    # Construire le label de la tâche
+    label = f"{s['Semaine']} ({start.strftime('%d/%m')})"
+    # Ajouter la tâche avec le type 'Semaine' et un ordre pour conserver la séquence
+    tasks.append({"Task": label, "Start": start, "Finish": end, "Type": "Semaine", "Order": i})
+
+# Calculer la date de début pour les mois (après la 12ème semaine)
 date_mois_debut = date_debut + timedelta(weeks=12)
 
-# Boucle pour générer les données de chaque mois
+# Générer les 6 mois et les ajouter après les semaines
 for i in range(6):
-    # Calculer le mois courant
     mois = (date_mois_debut.month + i - 1) % 12 + 1
-    # Calculer l'année courante
     annee = date_mois_debut.year + (date_mois_debut.month + i - 1) // 12
-    
-    # Obtenir le nombre de jours dans le mois
     nombre_jours_mois = calendar.monthrange(annee, mois)[1]
-    
-    # Obtenir les noms des mois en français
-    noms_mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", 
-                 "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
-    # Obtenir le nom du mois actuel
+    start = datetime(annee, mois, 1)
+    end = datetime(annee, mois, nombre_jours_mois) + timedelta(days=1)
+    noms_mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
     nom_mois = noms_mois[mois - 1]
-    
-    # Créer la date de début du mois
-    date_debut_mois = datetime(annee, mois, 1)
-    # Créer la date de fin du mois
-    date_fin_mois = datetime(annee, mois, nombre_jours_mois)
-    
-    # Ajouter les données du mois dans la liste
-    donnees_mois.append({
-        # Ajouter le numéro du mois
-        "Mois": f"M{i+1:02d}",
-        # Ajouter le nom du mois
-        "Nom": nom_mois,
-        # Ajouter l'année
-        "Année": annee,
-        # Ajouter la date de début
-        "Date de début": date_debut_mois.strftime('%d/%m/%Y'),
-        # Ajouter la date de fin
-        "Date de fin": date_fin_mois.strftime('%d/%m/%Y'),
-        # Ajouter le nombre de jours
-        "Jours": nombre_jours_mois
-    })
+    label = f"{nom_mois} {annee}"
+    tasks.append({"Task": label, "Start": start, "Finish": end, "Type": "Mois", "Order": 12 + i})
 
-# Créer un DataFrame avec les données des mois
-df_mois = pd.DataFrame(donnees_mois)
+# Créer un DataFrame pour le Gantt
+df_gantt = pd.DataFrame(tasks)
 
-# Afficher le tableau des mois
-st.dataframe(
-    # Utiliser le DataFrame créé
-    df_mois,
-    # Utiliser la largeur complète de la colonne
-    use_container_width=True,
-    # Cacher l'index des lignes
-    hide_index=True
+# Définir l'ordre des tâches pour que les semaines apparaissent en premier puis les mois
+ordre_taches = df_gantt.sort_values("Order")["Task"].tolist()
+
+
+# Construire des colonnes catégorielles : 12 semaines puis 6 mois
+period_labels = df_gantt.sort_values("Order")["Task"].tolist()  # ordre des colonnes
+period_types = df_gantt.sort_values("Order")["Type"].tolist()
+period_starts = df_gantt.sort_values("Order")["Start"].tolist()
+period_ends = df_gantt.sort_values("Order")["Finish"].tolist()
+
+import plotly.graph_objects as go
+
+# Préparer les couleurs
+color_map = {"Semaine": "#1f77b4", "Mois": "#ff7f0e"}
+colors = [color_map.get(t, "#888888") for t in period_types]
+
+# Créer une figure avec des colonnes verticales (chaque colonne représente une période)
+fig = go.Figure()
+
+# Ajouter une barre par période (hauteur fixe) pour représenter la colonne
+fig.add_trace(go.Bar(
+    x=period_labels,
+    y=[1] * len(period_labels),
+    marker_color=colors,
+    hoverinfo='text',
+    text=[f"{lbl}<br>{start.strftime('%d/%m/%Y')} → {(end - timedelta(days=1)).strftime('%d/%m/%Y')}" for lbl, start, end in zip(period_labels, period_starts, period_ends)],
+    hovertemplate="%{text}<extra></extra>",
+))
+
+# Style : enlever axes y inutiles et rendre lisible
+fig.update_yaxes(visible=False)
+fig.update_layout(
+    barmode='stack',
+    showlegend=False,
+    title="Planning — 12 semaines puis 6 mois (colonnes)",
+    xaxis_title="Périodes",
+    margin=dict(l=40, r=20, t=60, b=120),
 )
 
-# Afficher un résumé des mois
-dernier_mois = donnees_mois[-1]
-# Afficher les mois avec les dates de début et fin
-st.info(f"✅ **{len(df_mois)} mois** planifiés du {dernier_mois['Date de début']} au {dernier_mois['Date de fin']}")
+# Rotation des labels x pour lisibilité
+fig.update_xaxes(tickangle= -45)
 
-# Ajouter une ligne de séparation
-st.divider()
+# Afficher le graphique dans Streamlit
+st.plotly_chart(fig, use_container_width=True)
 
-# ============================================================================
-# SECTION 3: RÉSUMÉ GLOBAL
-# ============================================================================
-
-# Afficher le titre du résumé
-st.header("📈 Résumé du planning")
-
-# Créer 4 colonnes pour afficher les métriques principales
-col1, col2, col3, col4 = st.columns(4)
-
-# Afficher la métrique du nombre de semaines
-with col1:
-    # Afficher le nombre total de semaines
-    st.metric("📅 Semaines", "12")
-
-# Afficher la métrique du nombre de mois
-with col2:
-    # Afficher le nombre total de mois
-    st.metric("📊 Mois", "6")
-
-# Afficher la métrique de la date de fin
-with col3:
-    # Calculer la date de fin totale
-    date_fin_totale = date_debut + timedelta(weeks=12, days=180)
-    # Afficher la date de fin
-    st.metric("🏁 Date de fin", date_fin_totale.strftime('%d/%m/%Y'))
-
-# Afficher la métrique du nombre de jours total
-with col4:
-    # Calculer le nombre total de jours
-    nombre_jours_total = (date_fin_totale - date_debut).days
-    # Afficher le nombre total de jours
-    st.metric("⏱️ Jours total", f"{nombre_jours_total}")
-
-# Afficher un message de succès
-st.success("✅ Planning créé avec succès !")
+# Fin de la vue Gantt (le résumé demandé a été supprimé)
