@@ -156,21 +156,28 @@ colors = [color_map.get(t, "#888888") for t in period_types]
 # Construire un subplot avec 2 lignes : en haut les titres/colonnes, en bas les lignes de projets
 from plotly.subplots import make_subplots
 
-# Exemple de projets (nom + indice période de début/fin)
-# Les indices correspondent aux positions dans `period_labels` (0..17)
-projects = [
-    {"name": "Projet Alpha", "start": 0, "end": 3},    # semaine 1 → semaine 4
-    {"name": "Projet Beta",  "start": 2, "end": 10},   # chevauche semaines + mois
-    {"name": "Projet Gamma", "start": 5, "end": 17},   # commence semaine 6 → dernier mois
-]
+# Gérer les projets via `st.session_state` pour permettre l'ajout dynamique
+if "projects" not in st.session_state:
+    # Projets par défaut, triés alphabétiquement
+    st.session_state.projects = [
+        {"name": "Projet Alpha", "start": 0, "end": 3},
+        {"name": "Projet Beta",  "start": 2, "end": 10},
+        {"name": "Projet Gamma", "start": 5, "end": 17},
+    ]
+    # Trier les projets par ordre alphabétique au démarrage
+    st.session_state.projects.sort(key=lambda p: p["name"].lower())
 
-# Construire la matrice projet x période (0/1)
-project_names = [p["name"] for p in projects]
+# Utiliser la liste de projets depuis le session state
+projects = st.session_state.projects
+
+# Pour l'affichage, les projets sont déjà triés alphabétiquement en session state
+projects_display = projects
+
+# Construire la matrice projet x période (0/1) à partir des projets triés
+project_names = [p["name"] for p in projects_display]
 z = []
-for p in projects:
-    row = []
-    for idx in range(len(period_labels)):
-        row.append(1 if (idx >= p["start"] and idx <= p["end"]) else 0)
+for p in projects_display:
+    row = [1 if (idx >= p["start"] and idx <= p["end"]) else 0 for idx in range(len(period_labels))]
     z.append(row)
 
 # Construire une seule heatmap : colonnes en haut (axe X) et projets en lignes
@@ -200,4 +207,32 @@ fig.update_layout(
 # Afficher la figure dans Streamlit
 st.plotly_chart(fig, use_container_width=True)
 
-# Fin de la vue Gantt (le résumé demandé a été supprimé)
+# Formulaire d'ajout direct affiché sous le Gantt (un seul clic pour ajouter)
+st.markdown("---")
+st.subheader("Ajouter un projet")
+# Champs simples : nom, début, fin
+col_a, col_b, col_c, col_d = st.columns([3,2,2,1])
+with col_a:
+    new_name = st.text_input("Nom du projet", value="")
+with col_b:
+    new_start = st.selectbox("Période de début", period_labels, index=0)
+with col_c:
+    new_end = st.selectbox("Période de fin", period_labels, index=min(3, len(period_labels)-1))
+with col_d:
+    if st.button("Ajouter"):
+        # convertir labels en indices
+        si = period_labels.index(new_start)
+        ei = period_labels.index(new_end)
+        if new_name.strip() == "":
+            st.error("Le nom du projet est requis.")
+        elif ei < si:
+            st.error("La période de fin doit être après la période de début.")
+        else:
+            st.session_state.projects.append({"name": new_name.strip(), "start": si, "end": ei})
+            # Trier les projets par ordre alphabétique
+            st.session_state.projects.sort(key=lambda p: p["name"].lower())
+            st.success(f"Projet '{new_name.strip()}' ajouté.")
+            # Forcer la réexécution du script pour mettre à jour le graphique immédiatement
+            st.rerun()
+
+# Fin de la vue Gantt
