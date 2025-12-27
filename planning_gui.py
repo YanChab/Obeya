@@ -154,10 +154,30 @@ import plotly.graph_objects as go
 color_map = {"Semaine": "#1f77b4", "Mois": "#ff7f0e"}
 colors = [color_map.get(t, "#888888") for t in period_types]
 
-# Créer une figure avec des colonnes verticales (chaque colonne représente une période)
-fig = go.Figure()
+# Construire un subplot avec 2 lignes : en haut les titres/colonnes, en bas les lignes de projets
+from plotly.subplots import make_subplots
 
-# Ajouter une barre par période (hauteur fixe) pour représenter la colonne
+# Exemple de projets (nom + indice période de début/fin)
+# Les indices correspondent aux positions dans `period_labels` (0..17)
+projects = [
+    {"name": "Projet Alpha", "start": 0, "end": 3},    # semaine 1 → semaine 4
+    {"name": "Projet Beta",  "start": 2, "end": 10},   # chevauche semaines + mois
+    {"name": "Projet Gamma", "start": 5, "end": 17},   # commence semaine 6 → dernier mois
+]
+
+# Construire la matrice projet x période (0/1)
+project_names = [p["name"] for p in projects]
+z = []
+for p in projects:
+    row = []
+    for idx in range(len(period_labels)):
+        row.append(1 if (idx >= p["start"] and idx <= p["end"]) else 0)
+    z.append(row)
+
+# Créer figure avec deux sous-graphes alignés horizontalement
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.2, 0.8], vertical_spacing=0.02, specs=[[{"type":"bar"}], [{"type":"heatmap"}]])
+
+# Trace 1 : bar mince servant d'en-têtes de colonnes (visual only)
 fig.add_trace(go.Bar(
     x=period_labels,
     y=[1] * len(period_labels),
@@ -165,22 +185,40 @@ fig.add_trace(go.Bar(
     hoverinfo='text',
     text=[f"{lbl}<br>{start.strftime('%d/%m/%Y')} → {(end - timedelta(days=1)).strftime('%d/%m/%Y')}" for lbl, start, end in zip(period_labels, period_starts, period_ends)],
     hovertemplate="%{text}<extra></extra>",
-))
-
-# Style : enlever axes y inutiles et rendre lisible
-fig.update_yaxes(visible=False)
-fig.update_layout(
-    barmode='stack',
     showlegend=False,
-    title="Planning — 12 semaines puis 6 mois (colonnes)",
-    xaxis_title="Périodes",
-    margin=dict(l=40, r=20, t=60, b=120),
+), row=1, col=1)
+
+# Trace 2 : heatmap des projets (1 = actif)
+fig.add_trace(go.Heatmap(
+    z=z,
+    x=period_labels,
+    y=project_names,
+    colorscale=[[0, 'rgba(255,255,255,0)'], [1, '#2ca02c']],
+    showscale=False,
+    hovertemplate="Projet: %{y}<br>Période: %{x}<extra></extra>",
+), row=2, col=1)
+
+# Ajustements de layout : placer les labels des colonnes en haut
+fig.update_xaxes(side='top', tickangle=-45, row=1, col=1)
+fig.update_xaxes(side='bottom', tickangle=-45, row=2, col=1)
+
+# Cacher l'axe y de la première ligne
+fig.update_yaxes(visible=False, row=1, col=1)
+
+# Styling général
+fig.update_layout(
+    height=480,
+    margin=dict(l=40, r=20, t=80, b=120),
+    title_text="Planning — 12 semaines puis 6 mois (colonnes) avec projets",
 )
 
-# Rotation des labels x pour lisibilité
-fig.update_xaxes(tickangle= -45)
+# Ajouter des annotations de titre de colonne au-dessus (optionnel, aide visuelle)
+annotations = []
+for lbl, typ in zip(period_labels, period_types):
+    annotations.append(dict(x=lbl, y=1.05, xref='x', yref='paper', text=lbl, showarrow=False, font=dict(size=10, color='black')))
+fig.update_layout(annotations=annotations)
 
-# Afficher le graphique dans Streamlit
+# Afficher la figure dans Streamlit
 st.plotly_chart(fig, use_container_width=True)
 
 # Fin de la vue Gantt (le résumé demandé a été supprimé)
