@@ -8,6 +8,10 @@ from datetime import datetime, timedelta
 import calendar
 # Importer pandas pour créer des DataFrames
 import pandas as pd
+# Importer TinyDB pour le stockage persistant des données
+from tinydb import TinyDB, Query
+import json
+import os
 
 # Configurer la page Streamlit avec le titre et l'icône
 st.set_page_config(
@@ -182,17 +186,83 @@ period_types = df_gantt.sort_values("Order")["Type"].tolist()
 period_starts = df_gantt.sort_values("Order")["Start"].tolist()
 period_ends = df_gantt.sort_values("Order")["Finish"].tolist()
 
+# Initialiser TinyDB pour la persistance des données
+db_path = os.path.join(os.path.dirname(__file__), "db.json")
+db = TinyDB(db_path)
+projects_table = db.table("projects")
+
+# Fonction pour charger les projets depuis la base de données
+def load_projects_from_db():
+    """Charge les projets depuis TinyDB et les reformate pour Streamlit"""
+    projects_data = projects_table.all()
+    projects = []
+    for proj_data in projects_data:
+        # Convertir les chaînes de date JSON en objets datetime
+        proj = proj_data.copy()
+        proj["start_date"] = datetime.fromisoformat(proj.get("start_date", datetime.now().isoformat()))
+        proj["end_date"] = datetime.fromisoformat(proj.get("end_date", datetime.now().isoformat()))
+        # Assurer que les tâches ont des dates au format datetime
+        if "tasks" in proj and proj["tasks"]:
+            for i, task in enumerate(proj["tasks"]):
+                if isinstance(task.get("due_date"), str):
+                    proj["tasks"][i] = task.copy()
+                    proj["tasks"][i]["due_date"] = datetime.fromisoformat(task["due_date"])
+        projects.append(proj)
+    return projects
+
+# Fonction pour sauvegarder les projets dans la base de données
+def save_projects_to_db(projects):
+    """Sauvegarde les projets dans TinyDB"""
+    projects_table.truncate()  # Vider la table
+    for proj in projects:
+        # Convertir les dates en ISO format pour le stockage JSON
+        proj_to_save = proj.copy()
+        proj_to_save["start_date"] = proj["start_date"].isoformat()
+        proj_to_save["end_date"] = proj["end_date"].isoformat()
+        # Convertir les dates des tâches aussi
+        if "tasks" in proj_to_save:
+            for task in proj_to_save["tasks"]:
+                if isinstance(task.get("due_date"), datetime):
+                    task["due_date"] = task["due_date"].isoformat()
+        projects_table.insert(proj_to_save)
+
 # Gérer les projets via `st.session_state` pour permettre l'ajout dynamique
 if "projects" not in st.session_state:
-    # Projets par défaut, avec dates absolues et état
-    initial_date = datetime.now()
-    st.session_state.projects = [
-        {"name": "Projet Alpha", "start_date": initial_date + timedelta(days=0), "end_date": initial_date + timedelta(days=20), "status": "Dans les temps", "tasks": []},
-        {"name": "Projet Beta",  "start_date": initial_date + timedelta(days=14), "end_date": initial_date + timedelta(days=70), "status": "Dans les temps", "tasks": []},
-        {"name": "Projet Gamma", "start_date": initial_date + timedelta(days=35), "end_date": initial_date + timedelta(days=119), "status": "Pas démarré", "tasks": []},
-    ]
+    # Charger depuis la base de données
+    loaded_projects = load_projects_from_db()
+    if loaded_projects:
+        st.session_state.projects = loaded_projects
+    else:
+        # Projets par défaut si la DB est vide
+        initial_date = datetime.now()
+        st.session_state.projects = [
+            {"name": "Projet Alpha", "start_date": initial_date + timedelta(days=0), "end_date": initial_date + timedelta(days=20), "status": "Dans les temps", "tasks": []},
+            {"name": "Projet Beta",  "start_date": initial_date + timedelta(days=14), "end_date": initial_date + timedelta(days=70), "status": "Dans les temps", "tasks": []},
+            {"name": "Projet Gamma", "start_date": initial_date + timedelta(days=35), "end_date": initial_date + timedelta(days=119), "status": "Pas démarré", "tasks": []},
+        ]
+        # Sauvegarder les projets par défaut dans la DB
+        save_projects_to_db(st.session_state.projects)
     # Trier les projets par ordre alphabétique (A → Z) au démarrage
     st.session_state.projects.sort(key=lambda p: p["name"].lower())
+
+# Fonction pour normaliser les dates des tâches
+def ensure_task_dates_are_datetime(projects):
+    """Vérifie et convertit les dates de tâches string en datetime"""
+    for project in projects:
+        if "tasks" in project and project["tasks"]:
+            for task in project["tasks"]:
+                if isinstance(task.get("due_date"), str):
+                    task["due_date"] = datetime.fromisoformat(task["due_date"])
+    return projects
+
+# S'assurer que toutes les dates de tâches sont des datetime
+st.session_state.projects = ensure_task_dates_are_datetime(st.session_state.projects)
+
+# Fonction pour sauvegarder après modification
+def sync_db():
+    """Synchronise les projets en session avec la base de données"""
+    save_projects_to_db(st.session_state.projects)
+
 
 # Fonction pour convertir une date absolue en indice de période
 def date_to_period_index(date, period_labels, period_starts, period_ends):
@@ -326,8 +396,13 @@ for p in projects:
     # (sauf les tâches en retard ou filtrées par catégorie)
     if "tasks" in p and len(p["tasks"]) > 0:
         for task in p["tasks"]:
+            # Convertir la date de tâche si elle est en string
+            due_date = task["due_date"]
+            if isinstance(due_date, str):
+                due_date = datetime.fromisoformat(due_date)
+            
             # Ne pas afficher les tâches en retard dans les colonnes
-            if task["due_date"] < datetime.now():
+            if due_date < datetime.now():
                 continue
             
             # Filtrer par catégorie
@@ -335,7 +410,7 @@ for p in projects:
             if task_category not in st.session_state.filtered_categories:
                 continue
             
-            due_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
+            due_idx = date_to_period_index(due_date, period_labels, period_starts, period_ends)
             target_period = period_labels[due_idx]
             task_progress = task.get("progress", "0%")
             task_category = task.get("category", "Jalon")
@@ -622,6 +697,7 @@ if len(st.session_state.projects) > 0:
                                 
                                 # Trier les projets par ordre alphabétique
                                 st.session_state.projects.sort(key=lambda p: p["name"].lower())
+                                sync_db()  # Sauvegarder dans la DB
                                 
                                 st.success("Projet modifié.")
                                 st.rerun()
@@ -636,6 +712,7 @@ if len(st.session_state.projects) > 0:
                             if deleted_name in st.session_state.filtered_projects:
                                 st.session_state.filtered_projects.remove(deleted_name)
                             
+                            sync_db()  # Sauvegarder dans la DB
                             st.success(f"Projet supprimé.")
                             st.rerun()
                 
@@ -714,11 +791,13 @@ if len(st.session_state.projects) > 0:
                                                 "progress": task_progress_edit,
                                                 "category": task_category_edit
                                             }
+                                            sync_db()  # Sauvegarder dans la DB
                                             st.rerun()
                                 
                                 with col_delete:
                                     if st.button("🗑️", key=f"delete_task_{project['name']}_{task_idx}", use_container_width=True, help="Supprimer"):
                                         st.session_state.projects[proj_idx]["tasks"].pop(task_idx)
+                                        sync_db()  # Sauvegarder dans la DB
                                         st.rerun()
                     else:
                         st.caption("Aucune tâche")
@@ -781,6 +860,7 @@ if len(st.session_state.projects) > 0:
                                         "progress": task_progress,
                                         "category": task_category
                                     })
+                                    sync_db()  # Sauvegarder dans la DB
                                     # Incrémenter le compteur pour réinitialiser le champ Nom
                                     st.session_state.task_reset_count[project['name']] += 1
                                     st.success("Tâche créée !")
@@ -808,6 +888,7 @@ if len(st.session_state.projects) > 0:
                                         if "tasks" not in st.session_state.projects[proj_idx]:
                                             st.session_state.projects[proj_idx]["tasks"] = []
                                         st.session_state.projects[proj_idx]["tasks"].extend(new_tasks)
+                                        sync_db()  # Sauvegarder dans la DB
                                         st.success(f"{len(new_tasks)} importées.")
                                         st.rerun()
 
@@ -883,6 +964,7 @@ with col_d:
             st.session_state.projects.append({"name": new_name.strip(), "start_date": start_datetime, "end_date": end_datetime, "status": "Pas démarré", "tasks": []})
             # Trier les projets par ordre alphabétique (A → Z)
             st.session_state.projects.sort(key=lambda p: p["name"].lower())
+            sync_db()  # Sauvegarder dans la DB
             # Ajouter le nouveau projet au filtre pour qu'il s'affiche
             st.session_state.filtered_projects.append(new_name.strip())
             st.success(f"Projet '{new_name.strip()}' ajouté.")
