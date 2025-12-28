@@ -184,12 +184,12 @@ period_ends = df_gantt.sort_values("Order")["Finish"].tolist()
 
 # Gérer les projets via `st.session_state` pour permettre l'ajout dynamique
 if "projects" not in st.session_state:
-    # Projets par défaut, avec dates absolues
+    # Projets par défaut, avec dates absolues et état
     initial_date = datetime.now()
     st.session_state.projects = [
-        {"name": "Projet Alpha", "start_date": initial_date + timedelta(days=0), "end_date": initial_date + timedelta(days=20), "tasks": []},
-        {"name": "Projet Beta",  "start_date": initial_date + timedelta(days=14), "end_date": initial_date + timedelta(days=70), "tasks": []},
-        {"name": "Projet Gamma", "start_date": initial_date + timedelta(days=35), "end_date": initial_date + timedelta(days=119), "tasks": []},
+        {"name": "Projet Alpha", "start_date": initial_date + timedelta(days=0), "end_date": initial_date + timedelta(days=20), "status": "Dans les temps", "tasks": []},
+        {"name": "Projet Beta",  "start_date": initial_date + timedelta(days=14), "end_date": initial_date + timedelta(days=70), "status": "Dans les temps", "tasks": []},
+        {"name": "Projet Gamma", "start_date": initial_date + timedelta(days=35), "end_date": initial_date + timedelta(days=119), "status": "Pas démarré", "tasks": []},
     ]
     # Trier les projets par ordre alphabétique (A → Z) au démarrage
     st.session_state.projects.sort(key=lambda p: p["name"].lower())
@@ -212,6 +212,9 @@ if "filtered_projects" not in st.session_state:
 
 if "filtered_categories" not in st.session_state:
     st.session_state.filtered_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+
+if "filtered_statuses" not in st.session_state:
+    st.session_state.filtered_statuses = ["Pas démarré", "Dans les temps", "En retard", "Critique", "StandBy"]
 
 # Utiliser la liste de projets depuis le session state
 projects_full = st.session_state.projects
@@ -281,8 +284,8 @@ tableau_data = []
 tableau_styles = []  # Stocker les styles pour chaque ligne
 tableau_tooltips = []  # Stocker les tooltips pour chaque cellule
 
-# Filtrer les projets selon la sélection stockée
-projects = [p for p in projects_full if p["name"] in st.session_state.filtered_projects]
+# Filtrer les projets selon la sélection stockée (projets et états)
+projects = [p for p in projects_full if p["name"] in st.session_state.filtered_projects and p.get("status", "Pas démarré") in st.session_state.filtered_statuses]
 
 for p in projects:
     # Ligne unique pour le projet (les tâches seront intégrées dans les cellules du projet)
@@ -294,11 +297,15 @@ for p in projects:
     row_tooltips = [""]  # Tooltip vide pour la colonne Projet/Tâche
     project_tooltip = f"{p['name']} • fin {p['end_date'].strftime('%d/%m/%Y')}"
     tasks_per_period = [[] for _ in period_labels]  # Collecter les tâches par période pour le tooltip
+    
+    # Vérifier si le projet est "Pas démarré"
+    is_not_started = p.get("status", "Pas démarré") == "Pas démarré"
 
     for idx, period in enumerate(period_labels):
         if idx >= start_idx and idx <= end_idx:
             row[period] = ""  # La couleur de fond suffit pour représenter la période active
-            row_styles.append("active")
+            # Utiliser "not_started" (gris foncé) si le projet n'est pas démarré, sinon "active" (vert)
+            row_styles.append("not_started" if is_not_started else "active")
             row_tooltips.append(project_tooltip)
         else:
             row[period] = ""
@@ -418,6 +425,10 @@ st.markdown("""
         background-color: var(--color-project-bg);
         color: var(--color-text-on-color);
     }
+    .not_started {
+        background-color: #424242;
+        color: var(--color-text-on-color);
+    }
     .inactive {
         background-color: transparent;
     }
@@ -523,7 +534,7 @@ st.markdown("---")
 st.markdown("**✏️ Modifier un projet**")
 
 if len(st.session_state.projects) > 0:
-    filtered_projects = [p for p in st.session_state.projects if p["name"] in st.session_state.filtered_projects]
+    filtered_projects = [p for p in st.session_state.projects if p["name"] in st.session_state.filtered_projects and p.get("status", "Pas démarré") in st.session_state.filtered_statuses]
     if len(filtered_projects) > 0:
         # Afficher les popovers pour chaque projet
         for project in filtered_projects:
@@ -558,6 +569,16 @@ if len(st.session_state.projects) > 0:
                         key=f"edit_end_{project['name']}"
                     )
                     
+                    status_options = ["Pas démarré", "Dans les temps", "En retard", "Critique", "StandBy"]
+                    current_status = project.get("status", "Pas démarré")
+                    status_idx = status_options.index(current_status) if current_status in status_options else 0
+                    new_status = st.selectbox(
+                        "État du projet",
+                        options=status_options,
+                        index=status_idx,
+                        key=f"edit_status_{project['name']}"
+                    )
+                    
                     col_save, col_delete = st.columns(2)
                     with col_save:
                         if st.button("💾 Sauvegarder", key=f"save_project_{project['name']}", use_container_width=True):
@@ -575,6 +596,7 @@ if len(st.session_state.projects) > 0:
                                 st.session_state.projects[proj_idx]["name"] = new_project_name.strip()
                                 st.session_state.projects[proj_idx]["start_date"] = start_date
                                 st.session_state.projects[proj_idx]["end_date"] = end_date
+                                st.session_state.projects[proj_idx]["status"] = new_status
                                 
                                 # Trier les projets par ordre alphabétique
                                 st.session_state.projects.sort(key=lambda p: p["name"].lower())
@@ -771,7 +793,7 @@ if len(st.session_state.projects) > 0:
 st.markdown("---")
 st.markdown("**Filtres**")
 
-col_filter1, col_filter2 = st.columns(2)
+col_filter1, col_filter2, col_filter3 = st.columns(3)
 
 with col_filter1:
     all_project_names = [p["name"] for p in projects_full]
@@ -793,6 +815,16 @@ with col_filter2:
         key="filter_categories_selector"
     )
 
+with col_filter3:
+    all_statuses = ["Pas démarré", "Dans les temps", "En retard", "Critique", "StandBy"]
+    selected_statuses = st.multiselect(
+        "États des projets à afficher",
+        options=all_statuses,
+        default=st.session_state.filtered_statuses,
+        help="Sélectionne un ou plusieurs états pour filtrer les projets",
+        key="filter_statuses_selector"
+    )
+
 # Mettre à jour les filtres en session_state et rafraîchir
 filter_changed = False
 if selected_project_names != st.session_state.filtered_projects:
@@ -800,6 +832,9 @@ if selected_project_names != st.session_state.filtered_projects:
     filter_changed = True
 if selected_categories != st.session_state.filtered_categories:
     st.session_state.filtered_categories = selected_categories
+    filter_changed = True
+if selected_statuses != st.session_state.filtered_statuses:
+    st.session_state.filtered_statuses = selected_statuses
     filter_changed = True
 if filter_changed:
     st.rerun()
@@ -823,7 +858,7 @@ with col_d:
         elif end_datetime < start_datetime:
             st.error("La date de fin doit être après la date de début.")
         else:
-            st.session_state.projects.append({"name": new_name.strip(), "start_date": start_datetime, "end_date": end_datetime, "tasks": []})
+            st.session_state.projects.append({"name": new_name.strip(), "start_date": start_datetime, "end_date": end_datetime, "status": "Pas démarré", "tasks": []})
             # Trier les projets par ordre alphabétique (A → Z)
             st.session_state.projects.sort(key=lambda p: p["name"].lower())
             # Ajouter le nouveau projet au filtre pour qu'il s'affiche
