@@ -206,9 +206,12 @@ def date_to_period_index(date, period_labels, period_starts, period_ends):
     else:
         return len(period_labels) - 1
 
-# Initialiser le filtre dans session_state s'il n'existe pas
+# Initialiser les filtres dans session_state s'ils n'existent pas
 if "filtered_projects" not in st.session_state:
     st.session_state.filtered_projects = [p["name"] for p in st.session_state.projects]
+
+if "filtered_categories" not in st.session_state:
+    st.session_state.filtered_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
 
 # Utiliser la liste de projets depuis le session state
 projects_full = st.session_state.projects
@@ -243,11 +246,16 @@ for p in projects:
             row_tooltips.append("")
 
     # Ajouter les tâches directement dans la cellule de période du projet
-    # (sauf les tâches en retard)
+    # (sauf les tâches en retard ou filtrées par catégorie)
     if "tasks" in p and len(p["tasks"]) > 0:
         for task in p["tasks"]:
             # Ne pas afficher les tâches en retard dans les colonnes
             if task["due_date"] < datetime.now():
+                continue
+            
+            # Filtrer par catégorie
+            task_category = task.get("category", "Jalon")
+            if task_category not in st.session_state.filtered_categories:
                 continue
             
             due_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
@@ -362,12 +370,15 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
     
     # Deuxième colonne (En retard) - afficher les tâches en retard du projet
     if project_name.startswith('📋'):
-        # C'est un projet - chercher ses tâches en retard
+        # C'est un projet - chercher ses tâches en retard (filtrées par catégorie)
         project_full_name = project_name.replace('📋 ', '')
         current_project = next((p for p in st.session_state.projects if p["name"] == project_full_name), None)
         overdue_tasks = []
         if current_project and "tasks" in current_project:
-            overdue_tasks = [t for t in current_project["tasks"] if t["due_date"] < today]
+            overdue_tasks = [
+                t for t in current_project["tasks"] 
+                if t["due_date"] < today and t.get("category", "Jalon") in st.session_state.filtered_categories
+            ]
         
         if overdue_tasks:
             overdue_html = "<br>".join([f"⚠️ {escape(t['name'])}" for t in overdue_tasks])
@@ -496,8 +507,13 @@ if len(st.session_state.projects) > 0:
                                 progress_options = ["0%", "50%", "100%"]
                                 progress_idx = progress_options.index(current_progress) if current_progress in progress_options else 0
                                 
+                                # Catégorie de la tâche
+                                category_options = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+                                current_category = task.get('category', 'Jalon')
+                                category_idx = category_options.index(current_category) if current_category in category_options else 0
+                                
                                 # Tout sur une seule ligne avec colonnes
-                                col_name, col_due, col_progress, col_save, col_delete = st.columns([3, 2, 1, 0.8, 0.8])
+                                col_name, col_category, col_due, col_progress, col_save, col_delete = st.columns([2.5, 1.5, 1.5, 1.2, 0.4, 0.4])
                                 
                                 with col_name:
                                     task_name_edit = st.text_input(
@@ -506,6 +522,15 @@ if len(st.session_state.projects) > 0:
                                         key=f"edit_task_name_{project['name']}_{task_idx}",
                                         label_visibility="collapsed",
                                         placeholder="Nom de la tâche"
+                                    )
+                                
+                                with col_category:
+                                    task_category_edit = st.selectbox(
+                                        "Catégorie",
+                                        options=category_options,
+                                        index=category_idx,
+                                        key=f"edit_task_category_{project['name']}_{task_idx}",
+                                        label_visibility="collapsed"
                                     )
                                 
                                 with col_due:
@@ -536,7 +561,8 @@ if len(st.session_state.projects) > 0:
                                             st.session_state.projects[proj_idx]["tasks"][task_idx] = {
                                                 "name": task_name_edit.strip(),
                                                 "due_date": new_due_date,
-                                                "progress": task_progress_edit
+                                                "progress": task_progress_edit,
+                                                "category": task_category_edit
                                             }
                                             st.rerun()
                                 
@@ -551,7 +577,7 @@ if len(st.session_state.projects) > 0:
                     
                     # Formulaire d'ajout de tâche (aussi plus compact)
                     st.markdown("**Ajouter une tâche**")
-                    col_add_name, col_add_due, col_add_progress, col_add_btn = st.columns([3, 2, 1, 1])
+                    col_add_name, col_add_category, col_add_due, col_add_progress, col_add_btn = st.columns([2.5, 1.5, 1.5, 1.2, 0.8])
                     
                     with col_add_name:
                         task_name = st.text_input(
@@ -560,6 +586,15 @@ if len(st.session_state.projects) > 0:
                             key=f"task_name_{project['name']}",
                             label_visibility="collapsed",
                             placeholder="Nom de la tâche"
+                        )
+                    
+                    with col_add_category:
+                        task_category = st.selectbox(
+                            "Catégorie",
+                            options=["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"],
+                            index=0,
+                            key=f"task_category_{project['name']}",
+                            label_visibility="collapsed"
                         )
                     
                     with col_add_due:
@@ -591,25 +626,46 @@ if len(st.session_state.projects) > 0:
                                 st.session_state.projects[proj_idx]["tasks"].append({
                                     "name": task_name.strip(),
                                     "due_date": due_date,
-                                    "progress": task_progress
+                                    "progress": task_progress,
+                                    "category": task_category
                                 })
                                 st.rerun()
 
-# Filtre des projets à afficher (affiché sous le tableau)
+# Filtres à afficher (affichés sous le tableau)
 st.markdown("---")
-st.markdown("**Filtre**")
-all_project_names = [p["name"] for p in projects_full]
-selected_project_names = st.multiselect(
-    "Projets à afficher",
-    options=all_project_names,
-    default=st.session_state.filtered_projects,
-    help="Sélectionne un ou plusieurs projets pour les afficher dans le tableau",
-    key="filter_projects_selector"
-)
+st.markdown("**Filtres**")
 
-# Mettre à jour le filtre en session_state et rafraîchir
+col_filter1, col_filter2 = st.columns(2)
+
+with col_filter1:
+    all_project_names = [p["name"] for p in projects_full]
+    selected_project_names = st.multiselect(
+        "Projets à afficher",
+        options=all_project_names,
+        default=st.session_state.filtered_projects,
+        help="Sélectionne un ou plusieurs projets pour les afficher dans le tableau",
+        key="filter_projects_selector"
+    )
+
+with col_filter2:
+    all_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+    selected_categories = st.multiselect(
+        "Catégories de tâches à afficher",
+        options=all_categories,
+        default=st.session_state.filtered_categories,
+        help="Sélectionne une ou plusieurs catégories pour filtrer les tâches",
+        key="filter_categories_selector"
+    )
+
+# Mettre à jour les filtres en session_state et rafraîchir
+filter_changed = False
 if selected_project_names != st.session_state.filtered_projects:
     st.session_state.filtered_projects = selected_project_names
+    filter_changed = True
+if selected_categories != st.session_state.filtered_categories:
+    st.session_state.filtered_categories = selected_categories
+    filter_changed = True
+if filter_changed:
     st.rerun()
 
 # Formulaire d'ajout direct affiché sous le tableau (un seul clic pour ajouter)
