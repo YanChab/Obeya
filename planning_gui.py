@@ -216,6 +216,66 @@ if "filtered_categories" not in st.session_state:
 # Utiliser la liste de projets depuis le session state
 projects_full = st.session_state.projects
 
+# Helper: importer des tâches depuis un fichier Excel
+def parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache"):
+    """Lit un fichier Excel et retourne une liste de tâches normalisées.
+    Colonnes attendues (en ordre): Nom, Catégorie, Date d'échéance, Progression.
+    - Ignore la première ligne (entêtes) via pandas (header=0)
+    - Si la catégorie n'est pas reconnue, utilise "Jalon"
+    - Si la date n'est pas valide, utilise la date du jour
+    - Si la progression n'est pas 0%/50%/100%, utilise 0%
+    """
+    allowed_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+    allowed_progress = ["0%", "50%", "100%"]
+
+    try:
+        df = pd.read_excel(uploaded_file, sheet_name=sheet_name, engine="openpyxl")
+    except Exception as e:
+        st.error(f"Erreur de lecture du fichier Excel: {e}")
+        return [], {"category": 0, "due_date": 0, "progress": 0}
+
+    imported_tasks = []
+    corrections = {"category": 0, "due_date": 0, "progress": 0}
+    today = datetime.now()
+
+    # Parcourir les lignes de données (pandas considère la première ligne comme en-tête)
+    for _, row in df.iterrows():
+        # Lecture des colonnes par position
+        name = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+        if name == "" or name.lower() in ("nan", "none"):
+            # Ignorer les lignes sans nom de tâche
+            continue
+
+        raw_category = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
+        category = raw_category if raw_category in allowed_categories else "Jalon"
+        if category != raw_category:
+            corrections["category"] += 1
+
+        # Date d'échéance
+        raw_due = row.iloc[2] if len(row) > 2 else None
+        due_pd = pd.to_datetime(raw_due, errors="coerce")
+        if pd.isna(due_pd):
+            due_date = today
+            corrections["due_date"] += 1
+        else:
+            # Convertir en datetime natif
+            due_date = due_pd.to_pydatetime()
+
+        # Progression
+        raw_progress = str(row.iloc[3]).strip() if (len(row) > 3 and pd.notna(row.iloc[3])) else ""
+        progress = raw_progress if raw_progress in allowed_progress else "0%"
+        if progress != raw_progress:
+            corrections["progress"] += 1
+
+        imported_tasks.append({
+            "name": name,
+            "category": category,
+            "due_date": due_date,
+            "progress": progress,
+        })
+
+    return imported_tasks, corrections
+
 # Construire un tableau pour afficher le planning avec couleurs de fond
 tableau_data = []
 tableau_styles = []  # Stocker les styles pour chaque ligne
@@ -620,6 +680,33 @@ if len(st.session_state.projects) > 0:
                         st.caption("Aucune tâche")
                     
                     st.divider()
+
+                    # Importer des tâches depuis un fichier Excel
+                    st.markdown("**Importer des tâches (Excel)**")
+                    upload_col, import_btn_col = st.columns([3, 1])
+                    with upload_col:
+                        uploaded_file = st.file_uploader(
+                            "Fichier Excel (.xlsx) — onglet 'Model Tache'",
+                            type=["xlsx"],
+                            key=f"upload_excel_{project['name']}",
+                            help="Colonnes attendues: Nom | Catégorie | Échéance | État"
+                        )
+                    with import_btn_col:
+                        if st.button("Importer", key=f"import_tasks_{project['name']}", use_container_width=True):
+                            if uploaded_file is None:
+                                st.error("Veuillez sélectionner un fichier Excel.")
+                            else:
+                                new_tasks, corrections = parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache")
+                                if len(new_tasks) == 0:
+                                    st.warning("Aucune tâche importée depuis le fichier.")
+                                else:
+                                    if "tasks" not in st.session_state.projects[proj_idx]:
+                                        st.session_state.projects[proj_idx]["tasks"] = []
+                                    st.session_state.projects[proj_idx]["tasks"].extend(new_tasks)
+                                    st.success(
+                                        f"{len(new_tasks)} tâches importées. Corrections — Catégorie: {corrections['category']}, Date: {corrections['due_date']}, État: {corrections['progress']}"
+                                    )
+                                    st.rerun()
                     
                     # Formulaire d'ajout de tâche (aussi plus compact)
                     st.markdown("**Ajouter une tâche**")
