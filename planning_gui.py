@@ -230,18 +230,7 @@ def save_projects_to_db(projects):
 if "projects" not in st.session_state:
     # Charger depuis la base de données
     loaded_projects = load_projects_from_db()
-    if loaded_projects:
-        st.session_state.projects = loaded_projects
-    else:
-        # Projets par défaut si la DB est vide
-        initial_date = datetime.now()
-        st.session_state.projects = [
-            {"name": "Projet Alpha", "start_date": initial_date + timedelta(days=0), "end_date": initial_date + timedelta(days=20), "status": "Dans les temps", "tasks": []},
-            {"name": "Projet Beta",  "start_date": initial_date + timedelta(days=14), "end_date": initial_date + timedelta(days=70), "status": "Dans les temps", "tasks": []},
-            {"name": "Projet Gamma", "start_date": initial_date + timedelta(days=35), "end_date": initial_date + timedelta(days=119), "status": "Pas démarré", "tasks": []},
-        ]
-        # Sauvegarder les projets par défaut dans la DB
-        save_projects_to_db(st.session_state.projects)
+    st.session_state.projects = loaded_projects if loaded_projects else []
     # Trier les projets par ordre alphabétique (A → Z) au démarrage
     st.session_state.projects.sort(key=lambda p: p["name"].lower())
 
