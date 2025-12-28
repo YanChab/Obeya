@@ -129,3 +129,6 @@ dmypy.json
 *.swo
 *~
 .DS_Store
+
+# Office temporary Excel files
+~$*.xlsx
