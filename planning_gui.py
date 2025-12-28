@@ -487,48 +487,49 @@ if len(st.session_state.projects) > 0:
                     
                     # Affichage avec scrollable si beaucoup de tâches
                     if len(tasks) > 0:
-                        task_container = st.container(border=True, height=300)
+                        task_container = st.container(border=True, height=250)
                         with task_container:
                             for task_idx, task in enumerate(tasks):
-                                st.caption(f"📌 Tâche #{task_idx + 1}")
-                                
-                                # Champs modifiables pour chaque tâche
-                                task_name_edit = st.text_input(
-                                    "Nom de la tâche",
-                                    value=task['name'],
-                                    key=f"edit_task_name_{project['name']}_{task_idx}",
-                                    label_visibility="collapsed"
-                                )
-                                
                                 # Trouver l'index de la période actuelle
                                 current_period_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
-                                
-                                task_due_edit = st.selectbox(
-                                    "Date limite",
-                                    options=period_labels,
-                                    index=current_period_idx if current_period_idx < len(period_labels) else 0,
-                                    key=f"edit_task_due_{project['name']}_{task_idx}",
-                                    label_visibility="collapsed"
-                                )
-                                
                                 current_progress = task.get('progress', '0%')
                                 progress_options = ["0%", "50%", "100%"]
                                 progress_idx = progress_options.index(current_progress) if current_progress in progress_options else 0
                                 
-                                task_progress_edit = st.selectbox(
-                                    "État",
-                                    options=progress_options,
-                                    index=progress_idx,
-                                    key=f"edit_task_progress_{project['name']}_{task_idx}",
-                                    label_visibility="collapsed"
-                                )
+                                # Tout sur une seule ligne avec colonnes
+                                col_name, col_due, col_progress, col_save, col_delete = st.columns([3, 2, 1, 0.8, 0.8])
                                 
-                                # Boutons Sauvegarder et Supprimer côte à côte
-                                col_save_task, col_delete_task = st.columns(2)
-                                with col_save_task:
-                                    if st.button("💾 Sauvegarder", key=f"save_task_{project['name']}_{task_idx}", use_container_width=True):
+                                with col_name:
+                                    task_name_edit = st.text_input(
+                                        f"T{task_idx+1}",
+                                        value=task['name'],
+                                        key=f"edit_task_name_{project['name']}_{task_idx}",
+                                        label_visibility="collapsed",
+                                        placeholder="Nom de la tâche"
+                                    )
+                                
+                                with col_due:
+                                    task_due_edit = st.selectbox(
+                                        "Date",
+                                        options=period_labels,
+                                        index=current_period_idx if current_period_idx < len(period_labels) else 0,
+                                        key=f"edit_task_due_{project['name']}_{task_idx}",
+                                        label_visibility="collapsed"
+                                    )
+                                
+                                with col_progress:
+                                    task_progress_edit = st.selectbox(
+                                        "État",
+                                        options=progress_options,
+                                        index=progress_idx,
+                                        key=f"edit_task_progress_{project['name']}_{task_idx}",
+                                        label_visibility="collapsed"
+                                    )
+                                
+                                with col_save:
+                                    if st.button("💾", key=f"save_task_{project['name']}_{task_idx}", use_container_width=True, help="Sauvegarder"):
                                         if task_name_edit.strip() == "":
-                                            st.error("Le nom est requis.")
+                                            st.error("Nom requis.")
                                         else:
                                             # Mettre à jour la tâche
                                             new_due_date = period_ends[period_labels.index(task_due_edit)]
@@ -537,57 +538,62 @@ if len(st.session_state.projects) > 0:
                                                 "due_date": new_due_date,
                                                 "progress": task_progress_edit
                                             }
-                                            st.success("Tâche mise à jour.")
                                             st.rerun()
                                 
-                                with col_delete_task:
-                                    if st.button("🗑️ Supprimer", key=f"delete_task_{project['name']}_{task_idx}", use_container_width=True):
+                                with col_delete:
+                                    if st.button("🗑️", key=f"delete_task_{project['name']}_{task_idx}", use_container_width=True, help="Supprimer"):
                                         st.session_state.projects[proj_idx]["tasks"].pop(task_idx)
-                                        st.success("Tâche supprimée.")
                                         st.rerun()
-                                
-                                st.divider()
                     else:
                         st.caption("Aucune tâche")
                     
                     st.divider()
                     
-                    # Formulaire d'ajout de tâche
-                    st.markdown("**Ajouter une tâche**", help="Remplissez les champs ci-dessous")
-                    task_name = st.text_input(
-                        "Nom",
-                        value="",
-                        key=f"task_name_{project['name']}"
-                    )
+                    # Formulaire d'ajout de tâche (aussi plus compact)
+                    st.markdown("**Ajouter une tâche**")
+                    col_add_name, col_add_due, col_add_progress, col_add_btn = st.columns([3, 2, 1, 1])
                     
-                    task_due = st.selectbox(
-                        "Avant",
-                        options=period_labels,
-                        index=0,
-                        key=f"task_due_{project['name']}"
-                    )
+                    with col_add_name:
+                        task_name = st.text_input(
+                            "Nom",
+                            value="",
+                            key=f"task_name_{project['name']}",
+                            label_visibility="collapsed",
+                            placeholder="Nom de la tâche"
+                        )
                     
-                    task_progress = st.selectbox(
-                        "État",
-                        options=["0%", "50%", "100%"],
-                        index=0,
-                        key=f"task_progress_{project['name']}"
-                    )
+                    with col_add_due:
+                        task_due = st.selectbox(
+                            "Avant",
+                            options=period_labels,
+                            index=0,
+                            key=f"task_due_{project['name']}",
+                            label_visibility="collapsed"
+                        )
                     
-                    if st.button("➕ Ajouter", key=f"add_task_{project['name']}", use_container_width=True):
-                        if task_name.strip() == "":
-                            st.error("Nom requis.")
-                        else:
-                            due_date = period_ends[period_labels.index(task_due)]
-                            if "tasks" not in st.session_state.projects[proj_idx]:
-                                st.session_state.projects[proj_idx]["tasks"] = []
-                            st.session_state.projects[proj_idx]["tasks"].append({
-                                "name": task_name.strip(),
-                                "due_date": due_date,
-                                "progress": task_progress
-                            })
-                            st.success("Tâche ajoutée.")
-                            st.rerun()
+                    with col_add_progress:
+                        task_progress = st.selectbox(
+                            "État",
+                            options=["0%", "50%", "100%"],
+                            index=0,
+                            key=f"task_progress_{project['name']}",
+                            label_visibility="collapsed"
+                        )
+                    
+                    with col_add_btn:
+                        if st.button("➕", key=f"add_task_{project['name']}", use_container_width=True, help="Ajouter"):
+                            if task_name.strip() == "":
+                                st.error("Nom requis.")
+                            else:
+                                due_date = period_ends[period_labels.index(task_due)]
+                                if "tasks" not in st.session_state.projects[proj_idx]:
+                                    st.session_state.projects[proj_idx]["tasks"] = []
+                                st.session_state.projects[proj_idx]["tasks"].append({
+                                    "name": task_name.strip(),
+                                    "due_date": due_date,
+                                    "progress": task_progress
+                                })
+                                st.rerun()
 
 # Filtre des projets à afficher (affiché sous le tableau)
 st.markdown("---")
