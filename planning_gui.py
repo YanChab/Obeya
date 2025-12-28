@@ -681,84 +681,89 @@ if len(st.session_state.projects) > 0:
                     
                     st.divider()
 
-                    # Import Excel (compact, un seul fichier)
-                    upload_col, import_btn_col = st.columns([3.2, 0.8])
-                    with upload_col:
-                        uploaded_file = st.file_uploader(
-                            "Importer Excel (.xlsx)",
-                            type=["xlsx"],
-                            accept_multiple_files=False,
-                            label_visibility="collapsed",
-                            key=f"upload_excel_{project['name']}"
-                        )
-                    with import_btn_col:
-                        if st.button("📥", key=f"import_tasks_{project['name']}", use_container_width=True, help="Importer"):
-                            if uploaded_file is None:
-                                st.error("Veuillez sélectionner un fichier Excel.")
-                            else:
-                                new_tasks, corrections = parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache")
-                                if len(new_tasks) == 0:
-                                    st.warning("Aucune tâche importée depuis le fichier.")
-                                else:
-                                    if "tasks" not in st.session_state.projects[proj_idx]:
-                                        st.session_state.projects[proj_idx]["tasks"] = []
-                                    st.session_state.projects[proj_idx]["tasks"].extend(new_tasks)
-                                    st.success(f"{len(new_tasks)} tâches importées.")
-                                    st.rerun()
-                    
-                    # Formulaire d'ajout de tâche (affichage compact sur une seule ligne)
-                    col_add_name, col_add_category, col_add_due, col_add_progress, col_add_btn = st.columns([2.2, 1.2, 1.3, 1.0, 0.6])
-                    
-                    with col_add_name:
-                        task_name = st.text_input(
-                            "Nom",
-                            value="",
-                            key=f"task_name_{project['name']}",
-                            label_visibility="collapsed",
-                            placeholder="Nom"
-                        )
-                    
-                    with col_add_category:
-                        task_category = st.selectbox(
-                            "Catégorie",
-                            options=["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"],
-                            index=0,
-                            key=f"task_category_{project['name']}",
-                            label_visibility="collapsed"
-                        )
-                    
-                    with col_add_due:
-                        task_due_date = st.date_input(
-                            "Date",
-                            value=(datetime.now() + timedelta(days=7)).date(),
-                            key=f"task_due_{project['name']}",
-                            label_visibility="collapsed"
-                        )
-                    
-                    with col_add_progress:
-                        task_progress = st.selectbox(
-                            "État",
-                            options=["0%", "50%", "100%"],
-                            index=0,
-                            key=f"task_progress_{project['name']}",
-                            label_visibility="collapsed"
-                        )
-                    
-                    with col_add_btn:
-                        if st.button("➕", key=f"add_task_{project['name']}", use_container_width=True, help="Ajouter"):
-                            if task_name.strip() == "":
-                                st.error("Nom requis.")
-                            else:
-                                due_date = datetime.combine(task_due_date, datetime.min.time())
-                                if "tasks" not in st.session_state.projects[proj_idx]:
-                                    st.session_state.projects[proj_idx]["tasks"] = []
-                                st.session_state.projects[proj_idx]["tasks"].append({
-                                    "name": task_name.strip(),
-                                    "due_date": due_date,
-                                    "progress": task_progress,
-                                    "category": task_category
-                                })
-                                st.rerun()
+                    # Bloc compact: 2 colonnes — gauche (import), droite (création)
+                    with st.container(border=True):
+                        col_left, col_right = st.columns([1, 1], gap="small")
+
+                        # Colonne gauche: Import Excel (uploader large + bouton)
+                        with col_left:
+                            up_col, import_col = st.columns([3.0, 1.0])
+                            with up_col:
+                                uploaded_file = st.file_uploader(
+                                    "Importer Excel (.xlsx)",
+                                    type=["xlsx"],
+                                    accept_multiple_files=False,
+                                    label_visibility="collapsed",
+                                    key=f"upload_excel_{project['name']}"
+                                )
+                            with import_col:
+                                if st.button("📥", key=f"import_tasks_{project['name']}", use_container_width=True, help="Importer"):
+                                    if uploaded_file is None:
+                                        st.error("Veuillez sélectionner un fichier Excel.")
+                                    else:
+                                        new_tasks, corrections = parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache")
+                                        if len(new_tasks) == 0:
+                                            st.warning("Aucune tâche importée.")
+                                        else:
+                                            if "tasks" not in st.session_state.projects[proj_idx]:
+                                                st.session_state.projects[proj_idx]["tasks"] = []
+                                            st.session_state.projects[proj_idx]["tasks"].extend(new_tasks)
+                                            st.success(f"{len(new_tasks)} importées.")
+                                            st.rerun()
+
+                        # Colonne droite: Création de tâche sur 2 lignes
+                        with col_right:
+                            # Ligne 1: Nom + Catégorie
+                            r_name, r_cat = st.columns([2.2, 1.3])
+                            with r_name:
+                                task_name = st.text_input(
+                                    "Nom",
+                                    value="",
+                                    key=f"task_name_{project['name']}",
+                                    label_visibility="collapsed",
+                                    placeholder="Nom"
+                                )
+                            with r_cat:
+                                task_category = st.selectbox(
+                                    "Catégorie",
+                                    options=["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"],
+                                    index=0,
+                                    key=f"task_category_{project['name']}",
+                                    label_visibility="collapsed"
+                                )
+
+                            # Ligne 2: Date + État + Ajouter
+                            r_due, r_prog, r_add = st.columns([1.6, 1.0, 0.8])
+                            with r_due:
+                                task_due_date = st.date_input(
+                                    "Date",
+                                    value=(datetime.now() + timedelta(days=7)).date(),
+                                    key=f"task_due_{project['name']}",
+                                    label_visibility="collapsed"
+                                )
+                            with r_prog:
+                                task_progress = st.selectbox(
+                                    "État",
+                                    options=["0%", "50%", "100%"],
+                                    index=0,
+                                    key=f"task_progress_{project['name']}",
+                                    label_visibility="collapsed"
+                                )
+                            with r_add:
+                                if st.button("➕", key=f"add_task_{project['name']}", use_container_width=True, help="Ajouter"):
+                                    if task_name.strip() == "":
+                                        st.error("Nom requis.")
+                                    else:
+                                        due_date = datetime.combine(task_due_date, datetime.min.time())
+                                        if "tasks" not in st.session_state.projects[proj_idx]:
+                                            st.session_state.projects[proj_idx]["tasks"] = []
+                                        st.session_state.projects[proj_idx]["tasks"].append({
+                                            "name": task_name.strip(),
+                                            "due_date": due_date,
+                                            "progress": task_progress,
+                                            "category": task_category
+                                        })
+                                        st.rerun()
 
 # Filtres à afficher (affichés sous le tableau)
 st.markdown("---")
