@@ -448,7 +448,7 @@ st.markdown("""
         color: var(--color-text-on-color);
     }
     .standby {
-        background-color: #2a2a2a;
+        background-color: #1e0636;
         color: var(--color-text-on-color);
     }
     .inactive {
