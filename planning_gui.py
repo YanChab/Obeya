@@ -394,6 +394,10 @@ for p in projects:
             if due_date < datetime.now():
                 continue
             
+            # Ne pas afficher les tâches terminées (100%)
+            if task.get("progress", "0%") == "100%":
+                continue
+            
             # Filtrer par catégorie
             task_category = task.get("category", "Jalon")
             if task_category not in st.session_state.filtered_categories:
@@ -581,7 +585,9 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
         if current_project and "tasks" in current_project:
             overdue_tasks = [
                 t for t in current_project["tasks"] 
-                if t["due_date"] < today and t.get("category", "Jalon") in st.session_state.filtered_categories
+                if t["due_date"] < today 
+                and t.get("category", "Jalon") in st.session_state.filtered_categories
+                and t.get("progress", "0%") != "100%"
             ]
         
         if overdue_tasks:
@@ -959,3 +965,20 @@ with col_d:
             st.success(f"Projet '{new_name.strip()}' ajouté.")
             # Forcer la réexécution du script pour mettre à jour le graphique immédiatement
             st.rerun()
+
+# Section de gestion de la base de données
+st.markdown("---")
+st.markdown("### ⚙️ Gestion de la base de données")
+
+with st.expander("🗑️ Supprimer toutes les données"):
+    st.warning("⚠️ **Attention** : Cette action supprimera définitivement tous les projets et toutes les tâches de la base de données.")
+    confirm_delete = st.checkbox("Je confirme vouloir supprimer toutes les données", key="confirm_db_delete")
+    
+    if st.button("🗑️ Effacer la base de données", type="primary", disabled=not confirm_delete):
+        # Vider la session state
+        st.session_state.projects = []
+        st.session_state.filtered_projects = []
+        # Supprimer la base de données
+        projects_table.truncate()
+        st.success("✅ Base de données effacée avec succès!")
+        st.rerun()
