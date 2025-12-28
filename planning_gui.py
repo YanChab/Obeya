@@ -279,6 +279,9 @@ for p in projects:
             elif task_category == "Map-Qual-Val":
                 # Utiliser une icône de tube à essai pour les tests
                 task_label = f"<span class='task_mapqualval'>🧪 {escape(task['name'])}</span>"
+            elif task_category == "Industrialisation":
+                # Utiliser une icône d'usine pour l'industrialisation
+                task_label = f"<span class='task_industrialisation'>🏭 {escape(task['name'])}</span>"
             else:
                 # Icône losange pour les autres tâches
                 task_label = f"◆ {escape(task['name'])}"
@@ -379,7 +382,11 @@ st.markdown("""
         font-weight: bold;
     }
     .task_mapqualval {
-        color: #90caf9;
+        color: #ce93d8;
+        font-weight: bold;
+    }
+    .task_industrialisation {
+        color: #64b5f6;
         font-weight: bold;
     }
 </style>
