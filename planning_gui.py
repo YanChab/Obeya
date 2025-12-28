@@ -534,10 +534,9 @@ if len(st.session_state.projects) > 0:
                                     )
                                 
                                 with col_due:
-                                    task_due_edit = st.selectbox(
-                                        "Date",
-                                        options=period_labels,
-                                        index=current_period_idx if current_period_idx < len(period_labels) else 0,
+                                    task_due_date_edit = st.date_input(
+                                        "Dateîchance",
+                                        value=task["due_date"].date(),
                                         key=f"edit_task_due_{project['name']}_{task_idx}",
                                         label_visibility="collapsed"
                                     )
@@ -556,8 +555,8 @@ if len(st.session_state.projects) > 0:
                                         if task_name_edit.strip() == "":
                                             st.error("Nom requis.")
                                         else:
-                                            # Mettre à jour la tâche
-                                            new_due_date = period_ends[period_labels.index(task_due_edit)]
+                                            # Mettre à jour la tâche avec la date choisie
+                                            new_due_date = datetime.combine(task_due_date_edit, datetime.min.time())
                                             st.session_state.projects[proj_idx]["tasks"][task_idx] = {
                                                 "name": task_name_edit.strip(),
                                                 "due_date": new_due_date,
@@ -598,10 +597,9 @@ if len(st.session_state.projects) > 0:
                         )
                     
                     with col_add_due:
-                        task_due = st.selectbox(
-                            "Avant",
-                            options=period_labels,
-                            index=0,
+                        task_due_date = st.date_input(
+                            "Dateîchance",
+                            value=(datetime.now() + timedelta(days=7)).date(),
                             key=f"task_due_{project['name']}",
                             label_visibility="collapsed"
                         )
@@ -620,7 +618,7 @@ if len(st.session_state.projects) > 0:
                             if task_name.strip() == "":
                                 st.error("Nom requis.")
                             else:
-                                due_date = period_ends[period_labels.index(task_due)]
+                                due_date = datetime.combine(task_due_date, datetime.min.time())
                                 if "tasks" not in st.session_state.projects[proj_idx]:
                                     st.session_state.projects[proj_idx]["tasks"] = []
                                 st.session_state.projects[proj_idx]["tasks"].append({
@@ -674,20 +672,20 @@ col_a, col_b, col_c, col_d = st.columns([3,2,2,1])
 with col_a:
     new_name = st.text_input("Nom du projet", value="")
 with col_b:
-    new_start = st.selectbox("Période de début", period_labels, index=0)
+    new_start_date = st.date_input("Date de début", value=datetime.now().date())
 with col_c:
-    new_end = st.selectbox("Période de fin", period_labels, index=min(3, len(period_labels)-1))
+    new_end_date = st.date_input("Date de fin", value=(datetime.now() + timedelta(days=30)).date())
 with col_d:
     if st.button("Ajouter"):
-        # convertir labels en dates absolues
-        start_date = period_starts[period_labels.index(new_start)]
-        end_date = period_ends[period_labels.index(new_end)]
+        # Convertir les dates en datetime
+        start_datetime = datetime.combine(new_start_date, datetime.min.time())
+        end_datetime = datetime.combine(new_end_date, datetime.min.time())
         if new_name.strip() == "":
             st.error("Le nom du projet est requis.")
-        elif end_date < start_date:
-            st.error("La période de fin doit être après la période de début.")
+        elif end_datetime < start_datetime:
+            st.error("La date de fin doit être après la date de début.")
         else:
-            st.session_state.projects.append({"name": new_name.strip(), "start_date": start_date, "end_date": end_date, "tasks": []})
+            st.session_state.projects.append({"name": new_name.strip(), "start_date": start_datetime, "end_date": end_datetime, "tasks": []})
             # Trier les projets par ordre alphabétique (A → Z)
             st.session_state.projects.sort(key=lambda p: p["name"].lower())
             # Ajouter le nouveau projet au filtre pour qu'il s'affiche
