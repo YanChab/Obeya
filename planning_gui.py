@@ -270,6 +270,15 @@ for p in projects:
             elif task_category == "Livrable":
                 # Utiliser une icône de document pour les livrables
                 task_label = f"<span class='task_deliverable'>📄 {escape(task['name'])}</span>"
+            elif task_category == "Etude":
+                # Utiliser une icône de pile de livres pour les études
+                task_label = f"<span class='task_study'>📚 {escape(task['name'])}</span>"
+            elif task_category == "Prototype":
+                # Utiliser une icône d'outils pour les prototypes
+                task_label = f"<span class='task_prototype'>🔧 {escape(task['name'])}</span>"
+            elif task_category == "Map-Qual-Val":
+                # Utiliser une icône de tube à essai pour les tests
+                task_label = f"<span class='task_mapqualval'>🧪 {escape(task['name'])}</span>"
             else:
                 # Icône losange pour les autres tâches
                 task_label = f"◆ {escape(task['name'])}"
@@ -359,6 +368,18 @@ st.markdown("""
     }
     .task_deliverable {
         color: #ff9800;
+        font-weight: bold;
+    }
+    .task_study {
+        color: #66bb6a;
+        font-weight: bold;
+    }
+    .task_prototype {
+        color: #ffb366;
+        font-weight: bold;
+    }
+    .task_mapqualval {
+        color: #90caf9;
         font-weight: bold;
     }
 </style>
