@@ -34,7 +34,7 @@ st.markdown("""
         --color-table-border: #ddd;
         --color-table-bg: white;
         --color-cell-bg: #f9f9f9;
-        --color-project-bg: #2ca02c;
+        --color-project-bg: #1b5e20;
         --color-task-due-bg: #ff7f0e;
         --color-text-on-color: white;
         --color-table-text: inherit;
@@ -50,7 +50,7 @@ st.markdown("""
             --color-table-border: #555;
             --color-table-bg: #1e1e1e;
             --color-cell-bg: #2d2d2d;
-            --color-project-bg: #2ca02c;
+            --color-project-bg: #1b5e20;
             --color-task-due-bg: #ff7f0e;
             --color-text-on-color: white;
             --color-table-text: #e0e0e0;
@@ -261,7 +261,18 @@ for p in projects:
             due_idx = date_to_period_index(task["due_date"], period_labels, period_starts, period_ends)
             target_period = period_labels[due_idx]
             task_progress = task.get("progress", "0%")
-            task_label = f"◆ {escape(task['name'])} ({task_progress})"
+            task_category = task.get("category", "Jalon")
+            
+            # Créer le label avec icône et style différents selon la catégorie
+            if task_category == "Jalon":
+                # Utiliser un icône d'objectif pour les jalons et ajouter la classe CSS
+                task_label = f"<span class='task_milestone'>🎯 {escape(task['name'])}</span>"
+            elif task_category == "Livrable":
+                # Utiliser une icône de document pour les livrables
+                task_label = f"<span class='task_deliverable'>📄 {escape(task['name'])}</span>"
+            else:
+                # Icône losange pour les autres tâches
+                task_label = f"◆ {escape(task['name'])}"
 
             existing = row.get(target_period, "")
             if existing.strip():
@@ -341,6 +352,14 @@ st.markdown("""
     .task_due {
         background-color: var(--color-task-due-bg);
         color: var(--color-text-on-color);
+    }
+    .task_milestone {
+        color: #ff1744;
+        font-weight: bold;
+    }
+    .task_deliverable {
+        color: #ff9800;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
