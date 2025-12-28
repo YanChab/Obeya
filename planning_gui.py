@@ -681,18 +681,18 @@ if len(st.session_state.projects) > 0:
                     
                     st.divider()
 
-                    # Importer des tâches depuis un fichier Excel
-                    st.markdown("**Importer des tâches (Excel)**")
-                    upload_col, import_btn_col = st.columns([3, 1])
+                    # Import Excel (compact, un seul fichier)
+                    upload_col, import_btn_col = st.columns([3.2, 0.8])
                     with upload_col:
                         uploaded_file = st.file_uploader(
-                            "Fichier Excel (.xlsx) — onglet 'Model Tache'",
+                            "Importer Excel (.xlsx)",
                             type=["xlsx"],
-                            key=f"upload_excel_{project['name']}",
-                            help="Colonnes attendues: Nom | Catégorie | Échéance | État"
+                            accept_multiple_files=False,
+                            label_visibility="collapsed",
+                            key=f"upload_excel_{project['name']}"
                         )
                     with import_btn_col:
-                        if st.button("Importer", key=f"import_tasks_{project['name']}", use_container_width=True):
+                        if st.button("📥", key=f"import_tasks_{project['name']}", use_container_width=True, help="Importer"):
                             if uploaded_file is None:
                                 st.error("Veuillez sélectionner un fichier Excel.")
                             else:
@@ -703,14 +703,11 @@ if len(st.session_state.projects) > 0:
                                     if "tasks" not in st.session_state.projects[proj_idx]:
                                         st.session_state.projects[proj_idx]["tasks"] = []
                                     st.session_state.projects[proj_idx]["tasks"].extend(new_tasks)
-                                    st.success(
-                                        f"{len(new_tasks)} tâches importées. Corrections — Catégorie: {corrections['category']}, Date: {corrections['due_date']}, État: {corrections['progress']}"
-                                    )
+                                    st.success(f"{len(new_tasks)} tâches importées.")
                                     st.rerun()
                     
-                    # Formulaire d'ajout de tâche (aussi plus compact)
-                    st.markdown("**Ajouter une tâche**")
-                    col_add_name, col_add_category, col_add_due, col_add_progress, col_add_btn = st.columns([2.5, 1.5, 1.5, 1.2, 0.8])
+                    # Formulaire d'ajout de tâche (affichage compact sur une seule ligne)
+                    col_add_name, col_add_category, col_add_due, col_add_progress, col_add_btn = st.columns([2.2, 1.2, 1.3, 1.0, 0.6])
                     
                     with col_add_name:
                         task_name = st.text_input(
@@ -718,7 +715,7 @@ if len(st.session_state.projects) > 0:
                             value="",
                             key=f"task_name_{project['name']}",
                             label_visibility="collapsed",
-                            placeholder="Nom de la tâche"
+                            placeholder="Nom"
                         )
                     
                     with col_add_category:
@@ -732,7 +729,7 @@ if len(st.session_state.projects) > 0:
                     
                     with col_add_due:
                         task_due_date = st.date_input(
-                            "Dateîchance",
+                            "Date",
                             value=(datetime.now() + timedelta(days=7)).date(),
                             key=f"task_due_{project['name']}",
                             label_visibility="collapsed"
