@@ -686,11 +686,17 @@ if len(st.session_state.projects) > 0:
                         # Ligne 1: Création de tâche (Nom, Catégorie, Date, État, Ajouter)
                         task_name_col, task_cat_col, task_due_col, task_prog_col, task_add_col = st.columns([2.2, 1.2, 1.6, 1.2, 0.8])
                         
+                        # Utiliser un compteur pour réinitialiser le champ Nom après chaque création
+                        if "task_reset_count" not in st.session_state:
+                            st.session_state.task_reset_count = {}
+                        if project['name'] not in st.session_state.task_reset_count:
+                            st.session_state.task_reset_count[project['name']] = 0
+                        
                         with task_name_col:
                             task_name = st.text_input(
                                 "Nom",
                                 value="",
-                                key=f"task_name_{project['name']}",
+                                key=f"task_name_{project['name']}_{st.session_state.task_reset_count[project['name']]}",
                                 label_visibility="collapsed",
                                 placeholder="Nom"
                             )
@@ -731,6 +737,9 @@ if len(st.session_state.projects) > 0:
                                         "progress": task_progress,
                                         "category": task_category
                                     })
+                                    # Incrémenter le compteur pour réinitialiser le champ Nom
+                                    st.session_state.task_reset_count[project['name']] += 1
+                                    st.success("Tâche créée !")
                                     st.rerun()
 
                         # Ligne 2: Import Excel (uploader + bouton)
