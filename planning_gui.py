@@ -34,7 +34,7 @@ st.markdown("""
         --color-table-border: #ddd;
         --color-table-bg: white;
         --color-cell-bg: #f9f9f9;
-        --color-project-bg: #1b5e20;
+        --color-project-bg: #0d3a14;
         --color-task-due-bg: #ff7f0e;
         --color-text-on-color: white;
         --color-table-text: inherit;
@@ -50,7 +50,7 @@ st.markdown("""
             --color-table-border: #555;
             --color-table-bg: #1e1e1e;
             --color-cell-bg: #2d2d2d;
-            --color-project-bg: #1b5e20;
+            --color-project-bg: #0d3a14;
             --color-task-due-bg: #ff7f0e;
             --color-text-on-color: white;
             --color-table-text: #e0e0e0;
@@ -298,14 +298,24 @@ for p in projects:
     project_tooltip = f"{p['name']} • fin {p['end_date'].strftime('%d/%m/%Y')}"
     tasks_per_period = [[] for _ in period_labels]  # Collecter les tâches par période pour le tooltip
     
-    # Vérifier si le projet est "Pas démarré"
-    is_not_started = p.get("status", "Pas démarré") == "Pas démarré"
+    # Déterminer la classe CSS en fonction du statut du projet
+    project_status = p.get("status", "Pas démarré")
+    if project_status == "Pas démarré":
+        status_class = "not_started"
+    elif project_status == "En retard":
+        status_class = "overdue"
+    elif project_status == "Critique":
+        status_class = "critical"
+    elif project_status == "StandBy":
+        status_class = "standby"
+    else:  # "Dans les temps" or default
+        status_class = "active"
 
     for idx, period in enumerate(period_labels):
         if idx >= start_idx and idx <= end_idx:
             row[period] = ""  # La couleur de fond suffit pour représenter la période active
-            # Utiliser "not_started" (gris foncé) si le projet n'est pas démarré, sinon "active" (vert)
-            row_styles.append("not_started" if is_not_started else "active")
+            # Appliquer la classe CSS basée sur le statut du projet
+            row_styles.append(status_class)
             row_tooltips.append(project_tooltip)
         else:
             row[period] = ""
@@ -427,6 +437,18 @@ st.markdown("""
     }
     .not_started {
         background-color: #424242;
+        color: var(--color-text-on-color);
+    }
+    .overdue {
+        background-color: #4a2f0c;
+        color: var(--color-text-on-color);
+    }
+    .critical {
+        background-color: #571208;
+        color: var(--color-text-on-color);
+    }
+    .standby {
+        background-color: #2a2a2a;
         color: var(--color-text-on-color);
     }
     .inactive {
