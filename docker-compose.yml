@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  obeya:
+    build: .
+    container_name: planning-obeya
+    ports:
+      - "8501:8501"
+    volumes:
+      # Monter le dossier data pour persister la base de données
+      - ./data:/app/data
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    restart: unless-stopped
