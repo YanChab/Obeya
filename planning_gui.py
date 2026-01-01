@@ -1051,3 +1051,114 @@ with st.expander("🗑️ Supprimer toutes les données"):
         projects_table.truncate()
         st.success("✅ Base de données effacée avec succès!")
         st.rerun()
+
+# Section d'export et import de la base de données
+with st.expander("📤 Exporter / 📥 Importer la base de données"):
+    col_export, col_import = st.columns(2)
+    
+    with col_export:
+        st.markdown("#### 📤 Exporter")
+        st.write("Téléchargez une copie de votre base de données au format JSON.")
+        
+        # Préparer les données pour l'export
+        export_data = {
+            "export_date": datetime.now().isoformat(),
+            "projects": []
+        }
+        
+        # Convertir les projets pour l'export (avec conversion des dates en string)
+        for project in st.session_state.projects:
+            project_export = project.copy()
+            # Convertir les dates en format ISO string
+            if isinstance(project_export.get("start_date"), datetime):
+                project_export["start_date"] = project_export["start_date"].isoformat()
+            if isinstance(project_export.get("end_date"), datetime):
+                project_export["end_date"] = project_export["end_date"].isoformat()
+            
+            # Convertir les dates des tâches
+            if "tasks" in project_export:
+                for task in project_export["tasks"]:
+                    if isinstance(task.get("due_date"), datetime):
+                        task["due_date"] = task["due_date"].isoformat()
+            
+            export_data["projects"].append(project_export)
+        
+        # Créer le fichier JSON
+        json_export = json.dumps(export_data, ensure_ascii=False, indent=2)
+        
+        st.download_button(
+            label="⬇️ Télécharger la base de données",
+            data=json_export,
+            file_name=f"obeya_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+            help="Télécharger une sauvegarde de toutes vos données"
+        )
+    
+    with col_import:
+        st.markdown("#### 📥 Importer")
+        st.write("Importez une base de données depuis un fichier JSON.")
+        
+        uploaded_file = st.file_uploader(
+            "Choisir un fichier JSON",
+            type=["json"],
+            help="Sélectionnez un fichier de sauvegarde au format JSON"
+        )
+        
+        if uploaded_file is not None:
+            try:
+                # Lire et parser le fichier JSON
+                import_data = json.load(uploaded_file)
+                
+                # Vérifier que la structure est valide
+                if "projects" not in import_data:
+                    st.error("❌ Fichier invalide : la clé 'projects' est manquante.")
+                else:
+                    st.info(f"📊 Fichier contient {len(import_data['projects'])} projet(s)")
+                    
+                    import_option = st.radio(
+                        "Mode d'importation :",
+                        ["Remplacer toutes les données", "Ajouter aux données existantes"],
+                        help="Choisissez si vous voulez remplacer ou fusionner les données"
+                    )
+                    
+                    if st.button("✅ Confirmer l'import", type="primary"):
+                        # Remplacer ou vider selon l'option
+                        if import_option == "Remplacer toutes les données":
+                            st.session_state.projects = []
+                            projects_table.truncate()
+                        
+                        # Importer les projets
+                        imported_count = 0
+                        for project in import_data["projects"]:
+                            # Convertir les dates ISO string en datetime
+                            if isinstance(project.get("start_date"), str):
+                                project["start_date"] = datetime.fromisoformat(project["start_date"])
+                            if isinstance(project.get("end_date"), str):
+                                project["end_date"] = datetime.fromisoformat(project["end_date"])
+                            
+                            # Convertir les dates des tâches
+                            if "tasks" in project:
+                                for task in project["tasks"]:
+                                    if isinstance(task.get("due_date"), str):
+                                        task["due_date"] = datetime.fromisoformat(task["due_date"])
+                            
+                            # Ajouter le projet
+                            st.session_state.projects.append(project)
+                            imported_count += 1
+                        
+                        # Trier les projets par ordre alphabétique
+                        st.session_state.projects.sort(key=lambda p: p["name"].lower())
+                        
+                        # Sauvegarder dans la DB
+                        sync_db()
+                        
+                        # Réinitialiser les filtres
+                        st.session_state.filtered_projects = [p["name"] for p in st.session_state.projects]
+                        
+                        st.success(f"✅ {imported_count} projet(s) importé(s) avec succès!")
+                        st.rerun()
+                        
+            except json.JSONDecodeError:
+                st.error("❌ Erreur : le fichier n'est pas un JSON valide.")
+            except Exception as e:
+                st.error(f"❌ Erreur lors de l'import : {str(e)}")
