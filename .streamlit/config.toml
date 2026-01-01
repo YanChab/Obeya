@@ -10,3 +10,7 @@ primaryColor = "#1f77b4"
 [browser]
 # Forcer le format de date en français
 gatherUsageStats = false
+
+[runner]
+# Configuration pour forcer la locale
+fastReruns = true

@@ -115,7 +115,7 @@ initial_date = datetime.now()
 # Le sélecteur est placé 'à côté' de la date et de la semaine
 cols = st.columns(3)
 # Sélecteur de date (menu) dans la colonne du milieu
-selected_date = cols[2].date_input("Date de début du Gantt", value=initial_date.date())
+selected_date = cols[2].date_input("Date de début du Gantt", value=initial_date.date(), format="DD/MM/YYYY")
 
 # Convertir la date sélectionnée en datetime pour les calculs
 date_debut = datetime.combine(selected_date, datetime.min.time())
@@ -795,7 +795,8 @@ if len(st.session_state.projects) > 0:
                                         "Dateîchance",
                                         value=task["due_date"].date(),
                                         key=f"edit_task_due_{project['name']}_{task_idx}",
-                                        label_visibility="collapsed"
+                                        label_visibility="collapsed",
+                                        format="DD/MM/YYYY"
                                     )
                                 
                                 with col_progress:
@@ -865,7 +866,8 @@ if len(st.session_state.projects) > 0:
                                 "Date",
                                 value=(datetime.now() + timedelta(days=7)).date(),
                                 key=f"task_due_{project['name']}",
-                                label_visibility="collapsed"
+                                label_visibility="collapsed",
+                                format="DD/MM/YYYY"
                             )
                         with task_prog_col:
                             task_progress = st.selectbox(
@@ -977,9 +979,9 @@ col_a, col_b, col_c, col_d = st.columns([3,2,2,1])
 with col_a:
     new_name = st.text_input("Nom du projet", value="")
 with col_b:
-    new_start_date = st.date_input("Date de début", value=datetime.now().date())
+    new_start_date = st.date_input("Date de début", value=datetime.now().date(), format="DD/MM/YYYY")
 with col_c:
-    new_end_date = st.date_input("Date de fin", value=(datetime.now() + timedelta(days=30)).date())
+    new_end_date = st.date_input("Date de fin", value=(datetime.now() + timedelta(days=30)).date(), format="DD/MM/YYYY")
 with col_d:
     if st.button("Ajouter"):
         # Convertir les dates en datetime
