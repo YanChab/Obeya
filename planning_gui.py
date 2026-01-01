@@ -536,6 +536,9 @@ st.markdown("""
     .task_label {
         font-style: italic;
     }
+    .project_separator {
+        border-top: 2px solid var(--color-table-border) !important;
+    }
     .active {
         background-color: var(--color-project-bg);
         color: var(--color-text-on-color);
@@ -603,9 +606,10 @@ today = datetime.now()
 
 # Lignes de données
 for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
-    html_table += '<tr>'
-    # Première colonne (Projet/Tâche)
     project_name = row['Projet/Tâche']
+    # Ajouter une classe de séparation pour les projets (sauf le premier)
+    separator_class = ' project_separator' if project_name.startswith('📋') and row_idx > 0 else ''
+    html_table += f'<tr class="{separator_class.strip()}">'
     
     # Colonne projet/tâche
     if project_name.startswith('📋'):
