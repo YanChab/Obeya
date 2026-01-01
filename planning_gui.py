@@ -341,11 +341,27 @@ def parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache"):
             # Convertir en datetime natif
             due_date = due_pd.to_pydatetime()
 
-        # Progression
-        raw_progress = str(row.iloc[3]).strip() if (len(row) > 3 and pd.notna(row.iloc[3])) else ""
-        progress = raw_progress if raw_progress in allowed_progress else "0%"
-        if progress != raw_progress:
-            corrections["progress"] += 1
+        # Progression - Convertir les valeurs numériques en texte avec %
+        raw_progress = row.iloc[3] if (len(row) > 3 and pd.notna(row.iloc[3])) else ""
+        
+        # Si c'est un nombre (0, 0.5, 1) ou (0, 50, 100), convertir en texte avec %
+        if isinstance(raw_progress, (int, float)):
+            if raw_progress == 0 or raw_progress == 0.0:
+                progress = "0%"
+            elif raw_progress == 0.5 or raw_progress == 50:
+                progress = "50%"
+            elif raw_progress == 1 or raw_progress == 1.0 or raw_progress == 100:
+                progress = "100%"
+            else:
+                # Valeur non reconnue, utiliser 0%
+                progress = "0%"
+                corrections["progress"] += 1
+        else:
+            # Si c'est déjà du texte, vérifier qu'il est dans les valeurs autorisées
+            raw_progress_str = str(raw_progress).strip()
+            progress = raw_progress_str if raw_progress_str in allowed_progress else "0%"
+            if progress != raw_progress_str:
+                corrections["progress"] += 1
 
         imported_tasks.append({
             "name": name,
