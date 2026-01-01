@@ -539,25 +539,51 @@ st.markdown("""
     .project_separator {
         border-top: 2px solid var(--color-table-border) !important;
     }
+    
+    /* Couleurs des états de projet - Mode CLAIR */
     .active {
-        background-color: var(--color-project-bg);
-        color: var(--color-text-on-color);
+        background-color: #a8d5a8;
+        color: #1a4d1a;
     }
     .not_started {
-        background-color: #424242;
-        color: var(--color-text-on-color);
+        background-color: #d3d3d3;
+        color: #2c2c2c;
     }
     .overdue {
-        background-color: #4a2f0c;
-        color: var(--color-text-on-color);
+        background-color: #ffd699;
+        color: #663d00;
     }
     .critical {
-        background-color: #571208;
-        color: var(--color-text-on-color);
+        background-color: #ffb3b3;
+        color: #800000;
     }
     .standby {
-        background-color: #1e0636;
-        color: var(--color-text-on-color);
+        background-color: #e0c3ff;
+        color: #4a148c;
+    }
+    
+    /* Couleurs des états de projet - Mode SOMBRE */
+    @media (prefers-color-scheme: dark) {
+        .active {
+            background-color: #0d3a14;
+            color: white;
+        }
+        .not_started {
+            background-color: #424242;
+            color: white;
+        }
+        .overdue {
+            background-color: #4a2f0c;
+            color: white;
+        }
+        .critical {
+            background-color: #571208;
+            color: white;
+        }
+        .standby {
+            background-color: #1e0636;
+            color: white;
+        }
     }
     .inactive {
         background-color: transparent;
