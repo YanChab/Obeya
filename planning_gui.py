@@ -205,7 +205,10 @@ period_starts = df_gantt.sort_values("Order")["Start"].tolist()
 period_ends = df_gantt.sort_values("Order")["Finish"].tolist()
 
 # Initialiser TinyDB pour la persistance des données
-db_path = os.path.join(os.path.dirname(__file__), "db.json")
+# Utiliser le dossier data pour persister la base de données lors des mises à jour Docker
+data_dir = os.path.join(os.path.dirname(__file__), "data")
+os.makedirs(data_dir, exist_ok=True)
+db_path = os.path.join(data_dir, "db.json")
 db = TinyDB(db_path)
 projects_table = db.table("projects")
 
