@@ -1,0 +1,12 @@
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[theme]
+# Configuration du thème (optionnel)
+primaryColor = "#1f77b4"
+
+[browser]
+# Forcer le format de date en français
+gatherUsageStats = false

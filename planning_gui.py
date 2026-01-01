@@ -12,6 +12,24 @@ import pandas as pd
 from tinydb import TinyDB, Query
 import json
 import os
+# Importer locale pour forcer le format français
+import locale
+
+# Forcer la locale française pour les dates
+try:
+    # Essayer la locale française
+    locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+except locale.Error:
+    try:
+        # Alternative si fr_FR.UTF-8 n'est pas disponible
+        locale.setlocale(locale.LC_TIME, 'fr_FR')
+    except locale.Error:
+        try:
+            # Autre alternative pour certains systèmes
+            locale.setlocale(locale.LC_TIME, 'French_France.1252')
+        except locale.Error:
+            # Si aucune locale française n'est disponible, continuer avec la locale par défaut
+            pass
 
 # Configurer la page Streamlit avec le titre et l'icône
 st.set_page_config(

@@ -4,8 +4,23 @@ Ce document explique comment utiliser Planning Obeya avec Docker.
 
 ## Prérequis
 
-- Docker Desktop installé sur votre machine Windows
-- Télécharger depuis : https://www.docker.com/products/docker-desktop/
+- **Windows** : Docker Desktop installé sur votre machine Windows
+  - Télécharger depuis : https://www.docker.com/products/docker-desktop/
+- **Ubuntu/Linux** : Docker et Docker Compose installés
+  ```bash
+  sudo apt update
+  sudo apt install -y docker.io docker-compose
+  sudo systemctl start docker
+  sudo systemctl enable docker
+  sudo usermod -aG docker $USER  # Permet d'utiliser Docker sans sudo
+  ```
+
+## Configuration des formats de dates
+
+L'application est configurée pour afficher les dates au format français (JJ/MM/AAAA) :
+- Le Dockerfile installe automatiquement la locale française (fr_FR.UTF-8)
+- Les variables d'environnement sont configurées pour forcer le format français
+- Tous les affichages de dates utilisent le format JJ/MM/AAAA
 
 ## Utilisation avec Docker Compose (Recommandé)
 
