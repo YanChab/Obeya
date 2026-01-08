@@ -512,13 +512,16 @@ st.markdown("""
         padding: 8px;
         text-align: center;
         height: 30px;
-        background-color: transparent;
+        background-color: var(--color-table-bg);
         font-weight: bold;
         border-bottom: 2px solid var(--color-table-border);
         border-right: none;
         border-top: none;
         border-left: none;
         color: var(--color-table-text);
+        position: sticky;
+        top: 0;
+        z-index: 10;
     }
     td {
         padding: 8px;
@@ -623,10 +626,20 @@ st.markdown("""
         color: #9e9e9e;
         font-weight: bold;
     }
+    
+    /* Conteneur scrollable pour le tableau avec en-tête fixe */
+    .table-container {
+        height: calc(100vh - 100px);
+        min-height: 500px;
+        overflow-y: auto;
+        overflow-x: auto;
+        position: relative;
+        border: 1px solid var(--color-table-border);
+    }
 </style>
 """, unsafe_allow_html=True)
 # Construire le HTML du tableau
-html_table = '<table>'
+html_table = '<div class="table-container"><table>'
 
 # En-tête
 html_table += '<tr><th style="text-align: left;">Projet/Tâche</th><th style="text-align: left;">En retard</th>'
@@ -690,7 +703,7 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
     
     html_table += '</tr>'
 
-html_table += '</table>'
+html_table += '</table></div>'
 
 # Afficher le tableau HTML
 st.markdown(html_table, unsafe_allow_html=True)
@@ -703,7 +716,10 @@ if len(st.session_state.projects) > 0:
     filtered_projects = [p for p in st.session_state.projects if p["name"] in st.session_state.filtered_projects and p.get("status", "Pas démarré") in st.session_state.filtered_statuses]
     if len(filtered_projects) > 0:
         # Afficher les popovers pour chaque projet
-        for project in filtered_projects:
+        for proj_idx, project in enumerate(st.session_state.projects):
+            # Vérifier si le projet est dans les filtres
+            if project["name"] not in st.session_state.filtered_projects or project.get("status", "Pas démarré") not in st.session_state.filtered_statuses:
+                continue
             with st.popover(f"📋 {project['name']}", use_container_width=True):
                 st.markdown(f"**Modifier : {project['name']}**")
                 
@@ -718,21 +734,21 @@ if len(st.session_state.projects) > 0:
                     new_project_name = st.text_input(
                         "Nom",
                         value=project["name"],
-                        key=f"edit_name_{project['name']}"
+                        key=f"edit_name_{proj_idx}"
                     )
                     
                     new_start_period = st.selectbox(
                         "Début",
                         options=period_labels,
                         index=date_to_period_index(project["start_date"], period_labels, period_starts, period_ends),
-                        key=f"edit_start_{project['name']}"
+                        key=f"edit_start_{proj_idx}"
                     )
                     
                     new_end_period = st.selectbox(
                         "Fin",
                         options=period_labels,
                         index=date_to_period_index(project["end_date"], period_labels, period_starts, period_ends),
-                        key=f"edit_end_{project['name']}"
+                        key=f"edit_end_{proj_idx}"
                     )
                     
                     status_options = ["Pas démarré", "Dans les temps", "En retard", "Critique", "StandBy"]
@@ -742,14 +758,12 @@ if len(st.session_state.projects) > 0:
                         "État du projet",
                         options=status_options,
                         index=status_idx,
-                        key=f"edit_status_{project['name']}"
+                        key=f"edit_status_{proj_idx}"
                     )
                     
                     col_save, col_delete = st.columns(2)
                     with col_save:
-                        if st.button("💾 Sauvegarder", key=f"save_project_{project['name']}", use_container_width=True):
-                            # Trouver l'index du projet
-                            proj_idx = next(i for i, p in enumerate(st.session_state.projects) if p["name"] == project["name"])
+                        if st.button("💾 Sauvegarder", key=f"save_project_{proj_idx}", use_container_width=True):
                             
                             # Vérifier les dates
                             start_date = period_starts[period_labels.index(new_start_period)]
@@ -772,8 +786,7 @@ if len(st.session_state.projects) > 0:
                                 st.rerun()
                     
                     with col_delete:
-                        if st.button("🗑️ Supprimer", key=f"delete_project_{project['name']}", use_container_width=True):
-                            proj_idx = next(i for i, p in enumerate(st.session_state.projects) if p["name"] == project["name"])
+                        if st.button("🗑️ Supprimer", key=f"delete_project_{proj_idx}", use_container_width=True):
                             deleted_name = st.session_state.projects[proj_idx]["name"]
                             st.session_state.projects.pop(proj_idx)
                             
@@ -790,7 +803,6 @@ if len(st.session_state.projects) > 0:
                     st.markdown("**Tâches**")
                     
                     # Afficher les tâches existantes
-                    proj_idx = next(i for i, p in enumerate(st.session_state.projects) if p["name"] == project["name"])
                     tasks = st.session_state.projects[proj_idx].get("tasks", [])
                     
                     # Affichage avec scrollable si beaucoup de tâches
@@ -849,7 +861,7 @@ if len(st.session_state.projects) > 0:
                                     )
                                 
                                 with col_save:
-                                    if st.button("💾", key=f"save_task_{project['name']}_{task_idx}", use_container_width=True, help="Sauvegarder"):
+                                    if st.button("💾", key=f"save_task_{proj_idx}_{task_idx}", use_container_width=True, help="Sauvegarder"):
                                         if task_name_edit.strip() == "":
                                             st.error("Nom requis.")
                                         else:
@@ -865,7 +877,7 @@ if len(st.session_state.projects) > 0:
                                             st.rerun()
                                 
                                 with col_delete:
-                                    if st.button("🗑️", key=f"delete_task_{project['name']}_{task_idx}", use_container_width=True, help="Supprimer"):
+                                    if st.button("🗑️", key=f"delete_task_{proj_idx}_{task_idx}", use_container_width=True, help="Supprimer"):
                                         st.session_state.projects[proj_idx]["tasks"].pop(task_idx)
                                         sync_db()  # Sauvegarder dans la DB
                                         st.rerun()
@@ -882,14 +894,14 @@ if len(st.session_state.projects) > 0:
                         # Utiliser un compteur pour réinitialiser le champ Nom après chaque création
                         if "task_reset_count" not in st.session_state:
                             st.session_state.task_reset_count = {}
-                        if project['name'] not in st.session_state.task_reset_count:
-                            st.session_state.task_reset_count[project['name']] = 0
+                        if proj_idx not in st.session_state.task_reset_count:
+                            st.session_state.task_reset_count[proj_idx] = 0
                         
                         with task_name_col:
                             task_name = st.text_input(
                                 "Nom",
                                 value="",
-                                key=f"task_name_{project['name']}_{st.session_state.task_reset_count[project['name']]}",
+                                key=f"task_name_{proj_idx}_{st.session_state.task_reset_count[proj_idx]}",
                                 label_visibility="collapsed",
                                 placeholder="Nom"
                             )
@@ -898,14 +910,14 @@ if len(st.session_state.projects) > 0:
                                 "Catégorie",
                                 options=["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation", "Qualité"],
                                 index=0,
-                                key=f"task_category_{project['name']}",
+                                key=f"task_category_{proj_idx}",
                                 label_visibility="collapsed"
                             )
                         with task_due_col:
                             task_due_date = st.date_input(
                                 "Date",
                                 value=(datetime.now() + timedelta(days=7)).date(),
-                                key=f"task_due_{project['name']}",
+                                key=f"task_due_{proj_idx}",
                                 label_visibility="collapsed",
                                 format="DD/MM/YYYY"
                             )
@@ -914,11 +926,11 @@ if len(st.session_state.projects) > 0:
                                 "État",
                                 options=["0%", "50%", "100%"],
                                 index=0,
-                                key=f"task_progress_{project['name']}",
+                                key=f"task_progress_{proj_idx}",
                                 label_visibility="collapsed"
                             )
                         with task_add_col:
-                            if st.button("➕", key=f"add_task_{project['name']}", use_container_width=True, help="Ajouter"):
+                            if st.button("➕", key=f"add_task_{proj_idx}", use_container_width=True, help="Ajouter"):
                                 if task_name.strip() == "":
                                     st.error("Nom requis.")
                                 else:
@@ -933,7 +945,7 @@ if len(st.session_state.projects) > 0:
                                     })
                                     sync_db()  # Sauvegarder dans la DB
                                     # Incrémenter le compteur pour réinitialiser le champ Nom
-                                    st.session_state.task_reset_count[project['name']] += 1
+                                    st.session_state.task_reset_count[proj_idx] += 1
                                     st.success("Tâche créée !")
                                     st.rerun()
 
@@ -945,10 +957,10 @@ if len(st.session_state.projects) > 0:
                                 type=["xlsx"],
                                 accept_multiple_files=False,
                                 label_visibility="collapsed",
-                                key=f"upload_excel_{project['name']}"
+                                key=f"upload_excel_{proj_idx}"
                             )
                         with import_col:
-                            if st.button("📥", key=f"import_tasks_{project['name']}", use_container_width=True, help="Importer"):
+                            if st.button("📥", key=f"import_tasks_{proj_idx}", use_container_width=True, help="Importer"):
                                 if uploaded_file is None:
                                     st.error("Veuillez sélectionner un fichier Excel.")
                                 else:
