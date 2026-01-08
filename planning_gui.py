@@ -291,7 +291,7 @@ if "filtered_projects" not in st.session_state:
     st.session_state.filtered_projects = [p["name"] for p in st.session_state.projects]
 
 if "filtered_categories" not in st.session_state:
-    st.session_state.filtered_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+    st.session_state.filtered_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation", "Qualité"]
 
 if "filtered_statuses" not in st.session_state:
     st.session_state.filtered_statuses = ["Pas démarré", "Dans les temps", "En retard", "Critique", "StandBy"]
@@ -308,7 +308,7 @@ def parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache"):
     - Si la date n'est pas valide, utilise la date du jour
     - Si la progression n'est pas 0%/50%/100%, utilise 0%
     """
-    allowed_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+    allowed_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation", "Qualité"]
     allowed_progress = ["0%", "50%", "100%"]
 
     try:
@@ -464,6 +464,9 @@ for p in projects:
             elif task_category == "Industrialisation":
                 # Utiliser une icône d'usine pour l'industrialisation
                 task_label = f"<span class='task_industrialisation'>🏭 {escape(task['name'])}</span>"
+            elif task_category == "Qualité":
+                # Utiliser une icône de badge de qualité pour la qualité
+                task_label = f"<span class='task_quality'>🎖️ {escape(task['name'])}</span>"
             else:
                 # Icône losange pour les autres tâches
                 task_label = f"◆ {escape(task['name'])}"
@@ -614,6 +617,10 @@ st.markdown("""
     }
     .task_industrialisation {
         color: #64b5f6;
+        font-weight: bold;
+    }
+    .task_quality {
+        color: #9e9e9e;
         font-weight: bold;
     }
 </style>
@@ -798,7 +805,7 @@ if len(st.session_state.projects) > 0:
                                 progress_idx = progress_options.index(current_progress) if current_progress in progress_options else 0
                                 
                                 # Catégorie de la tâche
-                                category_options = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+                                category_options = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation", "Qualité"]
                                 current_category = task.get('category', 'Jalon')
                                 category_idx = category_options.index(current_category) if current_category in category_options else 0
                                 
@@ -889,7 +896,7 @@ if len(st.session_state.projects) > 0:
                         with task_cat_col:
                             task_category = st.selectbox(
                                 "Catégorie",
-                                options=["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"],
+                                options=["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation", "Qualité"],
                                 index=0,
                                 key=f"task_category_{project['name']}",
                                 label_visibility="collapsed"
@@ -973,7 +980,7 @@ with col_filter1:
     )
 
 with col_filter2:
-    all_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+    all_categories = ["Jalon", "Livrable", "Etude", "Prototype", "Map-Qual-Val", "Industrialisation", "Qualité"]
     selected_categories = st.multiselect(
         "Catégories de tâches à afficher",
         options=all_categories,
