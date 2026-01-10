@@ -274,6 +274,51 @@ def sync_db():
     save_projects_to_db(st.session_state.projects)
 
 
+# Fonction pour calculer l'avancement moyen par catégorie pour un projet
+def calculate_category_progress(project, category):
+    """Calcule la moyenne de l'avancement des tâches d'une catégorie spécifique
+    Retourne un pourcentage (0-100) ou None si aucune tâche de cette catégorie
+    """
+    if "tasks" not in project or len(project["tasks"]) == 0:
+        return None
+    
+    # Filtrer les tâches de la catégorie
+    category_tasks = [t for t in project["tasks"] if t.get("category", "Jalon") == category]
+    
+    if len(category_tasks) == 0:
+        return None
+    
+    # Convertir les pourcentages en nombres et calculer la moyenne
+    progress_values = []
+    for task in category_tasks:
+        progress_str = task.get("progress", "0%").replace("%", "")
+        try:
+            progress_values.append(float(progress_str))
+        except ValueError:
+            progress_values.append(0)
+    
+    if len(progress_values) == 0:
+        return None
+    
+    return sum(progress_values) / len(progress_values)
+
+
+# Fonction pour mettre à jour les avancements par catégorie pour tous les projets
+def update_category_progress_for_all_projects():
+    """Met à jour les avancements par catégorie pour tous les projets"""
+    categories = ["Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]
+    
+    for project in st.session_state.projects:
+        for category in categories:
+            key = f"Avancement {category}"
+            progress = calculate_category_progress(project, category)
+            if progress is not None:
+                # Arrondir à l'entier le plus proche
+                project[key] = f"{round(progress)}%"
+            else:
+                project[key] = None
+
+
 # Fonction pour convertir une date absolue en indice de période
 def date_to_period_index(date, period_labels, period_starts, period_ends):
     """Retourne l'indice de la période qui contient la date donnée"""
@@ -296,13 +341,16 @@ if "filtered_categories" not in st.session_state:
 if "filtered_statuses" not in st.session_state:
     st.session_state.filtered_statuses = ["Pas démarré", "Dans les temps", "En retard", "Critique", "StandBy"]
 
+# Mettre à jour les avancements par catégorie pour tous les projets
+update_category_progress_for_all_projects()
+
 # Utiliser la liste de projets depuis le session state
 projects_full = st.session_state.projects
 
 # Helper: importer des tâches depuis un fichier Excel
 def parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache"):
     """Lit un fichier Excel et retourne une liste de tâches normalisées.
-    Colonnes attendues (en ordre): Nom, Catégorie, Date d'échéance, Progression.
+    Colonnes attendues (en ordre): Nom, Catégorie, Description, Date d'échéance, Progression.
     - Ignore la première ligne (entêtes) via pandas (header=0)
     - Si la catégorie n'est pas reconnue, utilise "Jalon"
     - Si la date n'est pas valide, utilise la date du jour
@@ -324,18 +372,25 @@ def parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache"):
     # Parcourir les lignes de données (pandas considère la première ligne comme en-tête)
     for _, row in df.iterrows():
         # Lecture des colonnes par position
+        # Colonne 0: Nom de la tâche
         name = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
         if name == "" or name.lower() in ("nan", "none"):
             # Ignorer les lignes sans nom de tâche
             continue
 
+        # Colonne 1: Catégorie
         raw_category = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
         category = raw_category if raw_category in allowed_categories else "Jalon"
         if category != raw_category:
             corrections["category"] += 1
 
-        # Date d'échéance
-        raw_due = row.iloc[2] if len(row) > 2 else None
+        # Colonne 2: Description
+        description = str(row.iloc[2]).strip() if (len(row) > 2 and pd.notna(row.iloc[2])) else ""
+        if description.lower() in ("nan", "none"):
+            description = ""
+
+        # Colonne 3: Date d'échéance
+        raw_due = row.iloc[3] if len(row) > 3 else None
         due_pd = pd.to_datetime(raw_due, errors="coerce")
         if pd.isna(due_pd):
             due_date = today
@@ -344,8 +399,8 @@ def parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache"):
             # Convertir en datetime natif
             due_date = due_pd.to_pydatetime()
 
-        # Progression - Convertir les valeurs numériques en texte avec %
-        raw_progress = row.iloc[3] if (len(row) > 3 and pd.notna(row.iloc[3])) else ""
+        # Colonne 4: Progression - Convertir les valeurs numériques en texte avec %
+        raw_progress = row.iloc[4] if (len(row) > 4 and pd.notna(row.iloc[4])) else ""
         
         # Si c'est un nombre (0, 0.5, 1) ou (0, 50, 100), convertir en texte avec %
         if isinstance(raw_progress, (int, float)):
@@ -366,12 +421,18 @@ def parse_tasks_from_excel(uploaded_file, sheet_name="Model Tache"):
             if progress != raw_progress_str:
                 corrections["progress"] += 1
 
-        imported_tasks.append({
+        task = {
             "name": name,
             "category": category,
             "due_date": due_date,
             "progress": progress,
-        })
+        }
+        
+        # Ajouter la description si elle existe et si la catégorie le permet
+        if description and category in ["Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]:
+            task["description"] = description
+        
+        imported_tasks.append(task)
 
     return imported_tasks, corrections
 
@@ -445,7 +506,8 @@ for p in projects:
             task_progress = task.get("progress", "0%")
             task_category = task.get("category", "Jalon")
             
-            # Créer le label avec icône et style différents selon la catégorie
+            # Créer le label avec icône et nom pour certaines catégories
+            task_description = task.get("description", "")
             if task_category == "Jalon":
                 # Utiliser un icône d'objectif pour les jalons et ajouter la classe CSS
                 task_label = f"<span class='task_milestone'>🎯 {escape(task['name'])}</span>"
@@ -453,23 +515,35 @@ for p in projects:
                 # Utiliser une icône de document pour les livrables
                 task_label = f"<span class='task_deliverable'>📄 {escape(task['name'])}</span>"
             elif task_category == "Etude":
-                # Utiliser une icône de pile de livres pour les études
-                task_label = f"<span class='task_study'>📚 {escape(task['name'])}</span>"
+                # Utiliser une icône de pile de livres pour les études avec description
+                if task_description:
+                    task_label = f"<span class='task_study'>📚 {escape(task_description)}</span>"
+                else:
+                    task_label = f"<span class='task_study'>📚</span>"
             elif task_category == "Prototype":
-                # Utiliser une icône d'outils pour les prototypes
-                task_label = f"<span class='task_prototype'>🔧 {escape(task['name'])}</span>"
+                # Utiliser une icône d'outils pour les prototypes avec description
+                if task_description:
+                    task_label = f"<span class='task_prototype'>🔧 {escape(task_description)}</span>"
+                else:
+                    task_label = f"<span class='task_prototype'>🔧</span>"
             elif task_category == "Map-Qual-Val":
-                # Utiliser une icône de tube à essai pour les tests
-                task_label = f"<span class='task_mapqualval'>🧪 {escape(task['name'])}</span>"
+                # Utiliser une icône de tube à essai pour les tests avec description
+                if task_description:
+                    task_label = f"<span class='task_mapqualval'>🧪 {escape(task_description)}</span>"
+                else:
+                    task_label = f"<span class='task_mapqualval'>🧪</span>"
             elif task_category == "Industrialisation":
-                # Utiliser une icône d'usine pour l'industrialisation
-                task_label = f"<span class='task_industrialisation'>🏭 {escape(task['name'])}</span>"
+                # Utiliser une icône d'usine pour l'industrialisation avec description
+                if task_description:
+                    task_label = f"<span class='task_industrialisation'>🏭 {escape(task_description)}</span>"
+                else:
+                    task_label = f"<span class='task_industrialisation'>🏭</span>"
             elif task_category == "Qualité":
                 # Utiliser une icône de badge de qualité pour la qualité
                 task_label = f"<span class='task_quality'>🎖️ {escape(task['name'])}</span>"
             else:
                 # Icône losange pour les autres tâches
-                task_label = f"◆ {escape(task['name'])}"
+                task_label = f"◆"
 
             existing = row.get(target_period, "")
             if existing.strip():
@@ -482,10 +556,13 @@ for p in projects:
     # Construire les tooltips finaux en combinant projet + tâches de la période
     for idx, period in enumerate(period_labels):
         if tasks_per_period[idx]:
-            task_lines = [
-                f"- {t['name']} (échéance {t['due_date'].strftime('%d/%m/%Y')}) [{t.get('progress', '0%')}]"
-                for t in tasks_per_period[idx]
-            ]
+            task_lines = []
+            for t in tasks_per_period[idx]:
+                task_line = f"- {t['name']} (échéance {t['due_date'].strftime('%d/%m/%Y')}) [{t.get('progress', '0%')}]"
+                # Ajouter la description si elle existe
+                if t.get('description', '').strip():
+                    task_line += f"\n  Description: {t['description']}"
+                task_lines.append(task_line)
             tooltip_full = f"{project_tooltip}\nTâches:\n" + "\n".join(task_lines)
             row_tooltips[idx + 1] = tooltip_full
     tableau_data.append(row)
@@ -659,7 +736,28 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
     
     # Colonne projet/tâche
     if project_name.startswith('📋'):
-        html_table += f'<td class="row_label project_label">{project_name}</td>'
+        # C'est un projet - créer un tooltip avec les dates et les avancements
+        project_full_name = project_name.replace('📋 ', '')
+        current_project = next((p for p in st.session_state.projects if p["name"] == project_full_name), None)
+        if current_project:
+            tooltip_text = f"{project_full_name}\nDébut: {current_project['start_date'].strftime('%d/%m/%Y')}\nFin: {current_project['end_date'].strftime('%d/%m/%Y')}"
+            
+            # Ajouter les avancements par catégorie s'ils existent
+            avancements = []
+            for category in ["Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]:
+                avancement_key = f"Avancement {category}"
+                if avancement_key in current_project and current_project[avancement_key] is not None:
+                    avancements.append(f"{category}: {current_project[avancement_key]}")
+            
+            if avancements:
+                tooltip_text += "\n\nAvancements:\n" + "\n".join(avancements)
+            
+            # Remplacer les sauts de ligne par &#10; pour l'attribut HTML
+            tooltip_html = escape(tooltip_text).replace('\n', '&#10;')
+            tooltip_attr = f' title="{tooltip_html}"'
+            html_table += f'<td class="row_label project_label"{tooltip_attr}>{project_name}</td>'
+        else:
+            html_table += f'<td class="row_label project_label">{project_name}</td>'
     else:
         html_table += f'<td class="row_label task_label">{project_name}</td>'
     
@@ -678,7 +776,20 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
             ]
         
         if overdue_tasks:
-            overdue_html = "<br>".join([f"⚠️ {escape(t['name'])}" for t in overdue_tasks])
+            # Afficher le nom pour Jalon, Livrable et Qualité, ou la description pour les autres catégories
+            overdue_html_parts = []
+            for t in overdue_tasks:
+                task_cat = t.get("category", "Jalon")
+                if task_cat in ["Jalon", "Livrable", "Qualité"]:
+                    overdue_html_parts.append(f"⚠️ {escape(t['name'])}")
+                else:
+                    # Pour Etude, Prototype, Map-Qual-Val, Industrialisation : afficher description si elle existe
+                    task_desc = t.get("description", "").strip()
+                    if task_desc:
+                        overdue_html_parts.append(f"⚠️ {escape(task_desc)}")
+                    else:
+                        overdue_html_parts.append("⚠️")
+            overdue_html = "<br>".join(overdue_html_parts)
             # Créer un tooltip avec les détails des tâches en retard
             tooltip_lines = [f"Tâches en retard pour {project_full_name}:"]
             tooltip_lines.extend([
@@ -686,7 +797,9 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
                 for t in overdue_tasks
             ])
             tooltip_text = "\n".join(tooltip_lines)
-            tooltip_attr = f' title="{escape(tooltip_text)}"'
+            # Remplacer les sauts de ligne par &#10; pour l'attribut HTML
+            tooltip_html = escape(tooltip_text).replace('\n', '&#10;')
+            tooltip_attr = f' title="{tooltip_html}"'
             html_table += f'<td style="text-align: left; color: #d32f2f;"{tooltip_attr}>{overdue_html}</td>'
         else:
             html_table += '<td style="text-align: left;"></td>'
@@ -698,7 +811,12 @@ for row_idx, (_, row) in enumerate(df_tableau.iterrows()):
         style_class = tableau_styles[row_idx][period_labels.index(period) + 1]
         cell_content = row.get(period, "")
         tooltip_text = tableau_tooltips[row_idx][period_labels.index(period) + 1]
-        tooltip_attr = f' title="{escape(tooltip_text)}"' if tooltip_text else ""
+        if tooltip_text:
+            # Remplacer les sauts de ligne par &#10; pour l'attribut HTML
+            tooltip_html = escape(tooltip_text).replace('\n', '&#10;')
+            tooltip_attr = f' title="{tooltip_html}"'
+        else:
+            tooltip_attr = ""
         html_table += f'<td class="{style_class}"{tooltip_attr}>{cell_content}</td>'
     
     html_table += '</tr>'
@@ -833,6 +951,16 @@ if len(st.session_state.projects) > 0:
                                         placeholder="Nom de la tâche"
                                     )
                                 
+                                # Description pour certaines catégories
+                                if current_category in ["Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]:
+                                    task_description_edit = st.text_input(
+                                        f"Description T{task_idx+1}",
+                                        value=task.get('description', ''),
+                                        key=f"edit_task_description_{project['name']}_{task_idx}",
+                                        label_visibility="visible",
+                                        placeholder="Description (optionnelle)"
+                                    )
+                                
                                 with col_category:
                                     task_category_edit = st.selectbox(
                                         "Catégorie",
@@ -867,12 +995,16 @@ if len(st.session_state.projects) > 0:
                                         else:
                                             # Mettre à jour la tâche avec la date choisie
                                             new_due_date = datetime.combine(task_due_date_edit, datetime.min.time())
-                                            st.session_state.projects[proj_idx]["tasks"][task_idx] = {
+                                            updated_task = {
                                                 "name": task_name_edit.strip(),
                                                 "due_date": new_due_date,
                                                 "progress": task_progress_edit,
                                                 "category": task_category_edit
                                             }
+                                            # Ajouter la description si la catégorie le permet
+                                            if task_category_edit in ["Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]:
+                                                updated_task["description"] = task_description_edit.strip() if 'task_description_edit' in locals() else ""
+                                            st.session_state.projects[proj_idx]["tasks"][task_idx] = updated_task
                                             sync_db()  # Sauvegarder dans la DB
                                             st.rerun()
                                 
@@ -913,6 +1045,17 @@ if len(st.session_state.projects) > 0:
                                 key=f"task_category_{proj_idx}",
                                 label_visibility="collapsed"
                             )
+                        
+                        # Description pour certaines catégories
+                        task_description = ""
+                        if task_category in ["Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]:
+                            task_description = st.text_input(
+                                "Description",
+                                value="",
+                                key=f"task_description_{proj_idx}_{task_category}_{st.session_state.task_reset_count[proj_idx]}",
+                                label_visibility="visible",
+                                placeholder="Description (optionnelle)"
+                            )
                         with task_due_col:
                             task_due_date = st.date_input(
                                 "Date",
@@ -937,12 +1080,16 @@ if len(st.session_state.projects) > 0:
                                     due_date = datetime.combine(task_due_date, datetime.min.time())
                                     if "tasks" not in st.session_state.projects[proj_idx]:
                                         st.session_state.projects[proj_idx]["tasks"] = []
-                                    st.session_state.projects[proj_idx]["tasks"].append({
+                                    new_task = {
                                         "name": task_name.strip(),
                                         "due_date": due_date,
                                         "progress": task_progress,
                                         "category": task_category
-                                    })
+                                    }
+                                    # Ajouter la description si la catégorie le permet
+                                    if task_category in ["Etude", "Prototype", "Map-Qual-Val", "Industrialisation"]:
+                                        new_task["description"] = task_description.strip()
+                                    st.session_state.projects[proj_idx]["tasks"].append(new_task)
                                     sync_db()  # Sauvegarder dans la DB
                                     # Incrémenter le compteur pour réinitialiser le champ Nom
                                     st.session_state.task_reset_count[proj_idx] += 1
